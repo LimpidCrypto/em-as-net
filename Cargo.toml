@@ -1,0 +1,38 @@
+[package]
+name = "em-as-net"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "em_as_net"
+crate-type = ["lib"]
+
+[dependencies]
+anyhow = "1.0.68"
+embedded-io = { version = "0.4.0", features = ["async"] }
+libc = "0.2.139"
+rand = "0.8.5"
+static_cell = "1.0"
+thiserror-no-std = "2.0.2"
+take_mut = "0.2.2"
+
+[dependencies.embassy-net]
+git = "https://github.com/embassy-rs/embassy"
+package = "embassy-net"
+version = "0.1.0"
+features = ["nightly", "tcp", "medium-ethernet", "dhcpv4"]
+
+[dependencies.embassy-net-driver]
+git = "https://github.com/embassy-rs/embassy"
+package = "embassy-net-driver"
+
+[dependencies.embassy-net-driver-channel]
+git = "https://github.com/embassy-rs/embassy"
+package = "embassy-net-driver-channel"
+
+[dependencies.embassy-executor]
+git = "https://github.com/embassy-rs/embassy"
+package = "embassy-executor"
+features = ["nightly"]
