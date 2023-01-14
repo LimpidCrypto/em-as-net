@@ -1,2 +1,2 @@
-# em-as-ws
-A no_std, async websocket client
+# em-as-net
+no_std, async websocket and JsonRPC client
