@@ -8,4 +8,5 @@ pub const IFF_NO_PI: libc::c_int = 0x1000;
 
 pub const ETHERNET_HEADER_LEN: usize = 14;
 pub const ETHERNET_MTU: usize = 1500;
-pub const TCP_MAX_PACKET_SIZE: usize = 4096;
+pub const ETHERNET_MTU_COUNT: usize = 4;
+pub const TCP_BUF: usize = 4096;
