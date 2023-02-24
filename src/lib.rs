@@ -1,6 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(type_alias_impl_trait)]
-// #![feature(async_fn_in_trait)]
+//! Unstable
+#![feature(associated_type_defaults)]
+#![feature(never_type)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
