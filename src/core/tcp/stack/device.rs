@@ -1,14 +1,21 @@
-pub struct Nic<const MTU: usize, const MTU_COUNT: usize> {
-    pub inner: embassy_net_driver_channel::Device<'static, MTU>,
+use embassy_net_driver_channel::State;
+
+
+pub struct Device<'a, const MTU: usize, const BUF: usize> {
+    // state: embassy_net_driver_channel::State<MTU, BUF, BUF>,
+    device: embassy_net_driver_channel::Device<'a, MTU>
 }
 
-impl<const MTU: usize, const MTU_COUNT: usize> Nic<MTU, MTU_COUNT> {
-    pub fn new(
-        nic_mac_address: [u8; 6],
-        state: &'static mut embassy_net_driver_channel::State<MTU, MTU_COUNT, MTU_COUNT>,
-    ) -> Self {
-        let (_, device) = embassy_net_driver_channel::new(state, nic_mac_address);
+impl<'a, const MTU: usize, const BUF: usize> Device<'a, MTU, BUF> {
+    pub fn new(nic_mac_address: [u8; 6]) -> Self {
+        let mut state: State<MTU, BUF, BUF> = embassy_net_driver_channel::State::new();
+        let (_, device) = embassy_net_driver_channel::new(
+            &mut state,
+            nic_mac_address,
+        );
 
-        Self { inner: device }
+        Self {
+            device
+        }
     }
 }
