@@ -1,5 +1,3 @@
-use embassy_net_driver_channel::State;
-
 pub struct Nic<const MTU: usize, const MTU_COUNT: usize> {
     pub inner: embassy_net_driver_channel::Device<'static, MTU>,
 }

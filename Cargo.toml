@@ -26,7 +26,7 @@ test = [
 ]
 
 [dependencies]
-anyhow = "1.0.68"
+anyhow = { version = "1.0.68", default-features = false }
 embedded-io = { version = "0.4.0", features = ["async"], default-features = false }
 # embedded-tls = "0.11.0"
 # embedded-websocket = "0.8.0"

@@ -4,11 +4,15 @@ pub mod device;
 use self::config::TcpConfig;
 use self::device::Nic;
 use crate::constants::{ETHERNET_HEADER_LEN, ETHERNET_MTU, ETHERNET_MTU_COUNT};
-use crate::singleton;
+use crate::{singleton, Err};
 
-use embassy_net;
+use anyhow::Result;
+use embassy_net::{self, Ipv4Address, Ipv4Cidr};
+use heapless::Vec;
 use rand::RngCore;
 use static_cell::StaticCell;
+
+use super::error::tcp_stack_error::TcpStackError;
 
 trait Sizes {
     const MTU: usize;
@@ -34,7 +38,15 @@ impl TcpStack {
             { <TcpStack as Sizes>::MTU_COUNT },
         >::new());
         let device = Nic::new(nic_mac_address, state);
-        let config = TcpConfig::new_dhcp();
+        let config = TcpConfig::new_static(
+            Ipv4Cidr::new(Ipv4Address::new(192, 168, 69, 2), 24),
+            Some(Ipv4Address::new(192, 168, 69, 1)),
+            Vec::from_iter([
+                Ipv4Address::new(8, 8, 8, 8),
+                Ipv4Address::new(9, 9, 9, 9),
+                Ipv4Address::new(1, 1, 1, 1),
+            ]),
+        );
         let resources: &mut embassy_net::StackResources<2> =
             singleton!(embassy_net::StackResources::new());
 
@@ -47,7 +59,9 @@ impl TcpStack {
         Self { inner: stack }
     }
 
-    pub async fn _run(&self) -> ! {
-        self.inner.run().await
+    pub async fn run(&self) -> Result<()> {
+        self.inner.run().await;
+
+        Err!(TcpStackError::StackStoppedError)
     }
 }

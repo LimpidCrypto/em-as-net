@@ -1,8 +1,5 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(type_alias_impl_trait)]
-//! Unstable
-#![feature(associated_type_defaults)]
-#![feature(never_type)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -15,3 +12,5 @@ pub mod core;
 // #[cfg(feature = "client")]
 pub mod client;
 pub mod utils;
+
+mod _anyhow;

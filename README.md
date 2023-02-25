@@ -1,2 +1,2 @@
 # em-as-net
-no_std, async websocket and JsonRPC client
+embedded, async networking utilizing the [`embassy`](https://github.com/embassy-rs/embassy) crate.
