@@ -1,7 +1,7 @@
 
 mod read_buf;
 #[cfg(not(feature = "std"))]
-pub use read_buf::ReadBuf;
+pub(crate) use read_buf::ReadBuf;
 
 pub mod exceptions;
 pub use exceptions::*;
