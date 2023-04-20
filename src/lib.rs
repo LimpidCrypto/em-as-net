@@ -1,5 +1,9 @@
-#![cfg_attr(not(test), no_std)]
+#![no_std]
+
+#![allow(incomplete_features)]
 #![feature(type_alias_impl_trait)]
+#![feature(async_fn_in_trait)]
+#![feature(ip_in_core)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

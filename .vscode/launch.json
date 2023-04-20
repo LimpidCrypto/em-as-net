@@ -14,7 +14,7 @@
                     "--no-run",
                     "--lib",
                     "--package=em-as-net",
-                    "--features=test"
+                    "--features=std"
                 ],
                 "filter": {
                     "name": "em_as_net",
