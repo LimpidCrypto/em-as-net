@@ -1,88 +1,211 @@
-pub mod error;
-pub mod stack;
+use alloc::borrow::Cow;
 
-use core::cell::RefCell;
+pub use exceptions::*;
+#[cfg(feature = "std")]
+pub use std_tcp::TcpStream;
 
-use anyhow::Result;
-use embassy_net::{tcp::ConnectError, Ipv4Address};
-use embedded_io::asynch::Write;
+pub mod tls;
+pub mod exceptions;
 
-use crate::Err;
-use crate::{constants::TCP_BUF, core::tcp::stack::TcpStack, singleton};
-use error::tcp_socket_error::TcpSocketError;
-use static_cell::StaticCell;
+pub trait Connect<'a> {
+    type Error;
 
-pub struct TcpSocket {
-    pub remote: (Ipv4Address, u16),
-    pub inner: RefCell<embassy_net::tcp::TcpSocket<'static>>,
-    pub stack: &'static TcpStack,
+    async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), Self::Error>;
 }
 
-impl TcpSocket {
-    pub fn new(mac_address: [u8; 6], remote: (Ipv4Address, u16)) -> Self {
-        let stack: &'static TcpStack = &*singleton!(TcpStack::new(mac_address));
+#[cfg(feature = "std")]
+mod std_tcp {
+    use alloc::borrow::Cow;
+    use core::borrow::BorrowMut;
+    use core::cell::RefCell;
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
 
-        let rx_buffer: &'static mut [u8; TCP_BUF] = singleton!([0; TCP_BUF]);
-        let tx_buffer: &'static mut [u8; TCP_BUF] = singleton!([0; TCP_BUF]);
+    use tokio::io::{AsyncRead, AsyncWrite};
+    use tokio::net;
 
-        let socket = embassy_net::tcp::TcpSocket::new(&stack.inner, rx_buffer, tx_buffer);
+    use crate::core::framed::FramedException;
+    use crate::core::io;
 
-        Self {
-            remote,
-            inner: RefCell::new(socket),
-            stack,
+    use super::Connect;
+    use super::exceptions::TcpException;
+
+    pub struct TcpStream<T> {
+        stream: RefCell<Option<T>>,
+    }
+
+    impl<T> TcpStream<T> {
+        pub fn new() -> Self {
+            Self {
+                stream: RefCell::new(None),
+            }
         }
     }
 
-    #[allow(unused_must_use)]
-    pub async fn connect(&self) -> Result<(), ConnectError> {
-        self.stack.run();
-        embassy_futures::yield_now().await;
+    impl<'a> Connect<'a> for TcpStream<net::TcpStream> {
+        type Error = TcpException;
 
-        self._do_connect().await
-    }
+        async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), TcpException> {
+            let result = net::TcpStream::connect(&**ip).await;
 
-    pub async fn write_all(&self, buf: &[u8]) -> Result<()> {
-        match self.inner.borrow_mut().write_all(buf).await {
-            Ok(_) => Ok(()),
-            Err(_) => Err!(TcpSocketError::WriteError),
+            match result {
+                Ok(tcp_stream) => {
+                    self.stream
+                        .replace(Some(tcp_stream));
+                    Ok(())
+                }
+                Err(_) => {
+                    Err(TcpException::UnableToConnect)
+                }
+            }
         }
     }
 
-    async fn _do_connect(&self) -> Result<(), ConnectError> {
-        self.inner
-            .borrow_mut()
-            .set_timeout(Some(embassy_net::SmolDuration::from_secs(10)));
-        self.inner.borrow_mut().connect(self.remote).await
-    }
-}
+    impl io::AsyncRead for TcpStream<net::TcpStream> {
+        type Error = FramedException;
 
-#[cfg(test)]
-#[cfg(feature = "test")]
-mod test {
-    use super::*;
-    use embassy_net::Ipv4Address;
-
-    #[tokio::test]
-    async fn test_connect() {
-        let mac_address = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
-        let ip = Ipv4Address::new(4, 2, 2, 2);
-        let remote = (ip, 53);
-        let socket = TcpSocket::new(mac_address, remote);
-
-        // TODO: FIX `.connect` takes forever
-        let r = socket.connect().await;
-        if let Err(e) = r {
-            println!("connect error: {:?}", e);
-            return;
+        fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<Result<(), Self::Error>> {
+            match self.stream.borrow_mut().as_mut() {
+                None => {Poll::Ready(Err(FramedException::UnableToRead))}
+                Some(stream) => {
+                    match Pin::new(stream).borrow_mut().as_mut().poll_read(cx, buf) {
+                        Poll::Ready(result) => {
+                            match result {
+                                Ok(_) => {Poll::Ready(Ok(()))}
+                                Err(_) => {Poll::Ready(Err(FramedException::UnableToRead))}
+                            }
+                        },
+                        Poll::Pending => {return Poll::Pending;}
+                    }
+                }
+            }
         }
-        println!("connected!");
-        loop {
-            let r = socket.write_all(b"Hello!\n").await;
-            if let Err(e) = r {
-                println!("write error: {:?}", e);
-                return;
+    }
+
+    impl io::AsyncWrite for TcpStream<net::TcpStream> {
+        fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, FramedException>> {
+            match self.stream.borrow_mut().as_mut() {
+                None => {Poll::Ready(Err(FramedException::UnableToWrite))}
+                Some(stream) => {
+                    match Pin::new(stream).borrow_mut().as_mut().poll_write(cx, buf) {
+                        Poll::Ready(result) => {
+                            match result {
+                                Ok(ok) => {Poll::Ready(Ok(ok))}
+                                Err(_) => {Poll::Ready(Err(FramedException::UnableToWrite))}
+                            }
+                        }
+                        Poll::Pending => {return Poll::Pending;}
+                    }
+                }
+            }
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+            match self.stream.borrow_mut().as_mut() {
+                None => {Poll::Ready(Err(FramedException::UnableToFlush))}
+                Some(stream) => {
+                    match Pin::new(stream).borrow_mut().as_mut().poll_flush(cx) {
+                        Poll::Ready(result) => {
+                            match result {
+                                Ok(ok) => {Poll::Ready(Ok(ok))}
+                                Err(_) => {Poll::Ready(Err(FramedException::UnableToFlush))}
+                            }
+                        }
+                        Poll::Pending => {return Poll::Pending;}
+                    }
+                }
+            }
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+            match self.stream.borrow_mut().as_mut() {
+                None => {Poll::Ready(Err(FramedException::UnableToClose))}
+                Some(stream) => {
+                    match Pin::new(stream).borrow_mut().as_mut().poll_shutdown(cx) {
+                        Poll::Ready(result) => {
+                            match result {
+                                Ok(ok) => {Poll::Ready(Ok(ok))}
+                                Err(_) => {Poll::Ready(Err(FramedException::UnableToClose))}
+                            }
+                        }
+                        Poll::Pending => {return Poll::Pending;}
+                    }
+                }
             }
         }
     }
 }
+
+#[cfg(test)]
+#[cfg(feature = "std")]
+mod test_stream {
+    use alloc::borrow::Cow;
+
+    use embedded_websocket::{WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType};
+    use embedded_websocket::framer_async::{Framer, ReadResult};
+    use rand_core::RngCore;
+    use tokio::net;
+    use tokio::runtime::Runtime;
+
+    use crate::core::tcp::Connect;
+
+    use super::super::framed::{codec::Codec, Framed};
+    use super::TcpStream;
+
+    #[test]
+    fn test() {
+        async fn main_task() {
+            // define an empty `TcpStream`
+            let stream: TcpStream<net::TcpStream> = TcpStream::new();
+            stream.connect(&Cow::from("ws.vi-server.org:80")).await.unwrap();
+            let mut stream = Framed::new(stream, Codec::new());
+
+            let rng = rand::thread_rng();
+            let ws = WebSocketClient::new_client(rng);
+
+            let websocket_options = WebSocketOptions {
+                path: "/mirror",
+                host: "ws.vi-server.org",
+                origin: "http://ws.vi-server.org:80",
+                sub_protocols: None,
+                additional_headers: None,
+            };
+
+            let mut buffer = [0u8; 4096];
+            let mut framer = Framer::new(ws);
+            framer.connect(&mut stream, &mut buffer, &websocket_options).await.unwrap();
+
+            framer
+                .write(
+                    &mut stream,
+                    &mut buffer,
+                    WebSocketSendMessageType::Text,
+                    true,
+                    "Hello, world".as_bytes(),
+                )
+                .await.unwrap();
+
+            while let Some(read_result) = framer.read(&mut stream, &mut buffer).await {
+                let read_result = read_result.unwrap();
+                match read_result {
+                    ReadResult::Text(text) => {
+                        framer
+                            .close(
+                                &mut stream,
+                                &mut buffer,
+                                WebSocketCloseStatusCode::NormalClosure,
+                                None,
+                            )
+                            .await.unwrap()
+                    }
+                    _ => { // ignore other kinds of messages
+                    }
+                }
+            }
+        }
+
+        let runtime = Runtime::new().unwrap();
+        runtime.block_on(main_task())
+    }
+}
+
