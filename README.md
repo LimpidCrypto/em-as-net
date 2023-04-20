@@ -1,5 +1,6 @@
 # em-as-net
-embedded, async networking utilizing the [`embassy`](https://github.com/embassy-rs/embassy) crate.
+embedded, async networking, utilizing the [`embassy`](https://github.com/embassy-rs/embassy) crate for `no_std` networking.
+With `std` feature enabled we use [`tokio`](https://github.com/tokio-rs/tokio) crate for networking.
 
 ## core
 ### dns
@@ -18,3 +19,6 @@ Some `no_std` implementations of [`tokio::io`](https://github.com/tokio-rs/tokio
 
 It also contains a `no_std` implementation of [`std::io::IoSlice`](https://doc.rust-lang.org/std/io/struct.IoSlice.html).
 ### tcp
+
+## Features
+### Default
