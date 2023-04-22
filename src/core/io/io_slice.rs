@@ -1,6 +1,6 @@
 use core::fmt::{Debug, Formatter};
 use core::marker::PhantomData;
-use core::mem::replace;
+use core::mem::take;
 use core::ops::{Deref, DerefMut};
 use core::slice;
 use libc::{c_void, iovec};
@@ -56,7 +56,7 @@ impl<'a> IoSlice<'a> {
             }
         }
 
-        *bufs = &mut replace(bufs, &mut [])[remove..];
+        *bufs = &mut take(bufs)[remove..];
         if bufs.is_empty() {
             assert_eq!(
                 n, accumulated_len,
@@ -142,7 +142,7 @@ impl<'a> IoSliceMut<'a> {
             }
         }
 
-        *bufs = &mut replace(bufs, &mut [])[remove..];
+        *bufs = &mut take(bufs)[remove..];
         if bufs.is_empty() {
             assert_eq!(
                 n, accumulated_len,

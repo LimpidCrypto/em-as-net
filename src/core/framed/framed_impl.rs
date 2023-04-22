@@ -161,7 +161,7 @@ where
                         state.has_errored = true;
                         return Poll::Ready(Some(Err!(err)));
                     }
-                    Ok(ok) => ok,
+                    Ok(frame) => frame,
                 } {
                     return Poll::Ready(Some(Ok(frame)));
                 }
@@ -238,30 +238,24 @@ where
                 Ok(n) => {
                     if n == 0 {
                         return Poll::Ready(Err!(IoError::FailedToFlush));
-                    } else {
-                        return Poll::Ready(Ok(()));
                     }
                 }
             }
         }
 
         match ready!(pinned.inner.poll_flush(cx)) {
-            Err(e) => return Poll::Ready(Err!(e)),
-            Ok(_) => return Poll::Ready(Ok(())),
+            Err(e) => Poll::Ready(Err!(e)),
+            Ok(_) => Poll::Ready(Ok(())),
         }
-
-        Poll::Ready(Ok(()))
     }
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match ready!(self.as_mut().poll_flush(cx)) {
-            Err(e) => return Poll::Ready(Err!(e)),
-            Ok(_) => return Poll::Ready(Ok(())),
+        if let Err(err) = ready!(self.as_mut().poll_flush(cx)) {
+            return Poll::Ready(Err!(err))
         }
 
-        match ready!(self.project().inner.poll_shutdown(cx)) {
-            Err(e) => return Poll::Ready(Err!(e)),
-            Ok(_) => return Poll::Ready(Ok(())),
+        if let Err(err) = ready!(self.project().inner.poll_shutdown(cx)) {
+            return Poll::Ready(Err!(err))
         }
 
         Poll::Ready(Ok(()))

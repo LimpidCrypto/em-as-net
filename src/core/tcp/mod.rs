@@ -13,7 +13,7 @@ pub mod tls;
 pub trait Connect<'a> {
     type Error: Debug + Display;
 
-    async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), Self::Error>;
+    async fn connect(&self, ip: Cow<'a, str>) -> Result<(), Self::Error>;
 }
 
 #[cfg(feature = "std")]
@@ -47,12 +47,18 @@ mod std_tcp {
             }
         }
     }
+    
+    impl<T> Default for TcpStream<T> {
+        fn default() -> Self {
+            TcpStream::new()
+        }
+    }
 
     impl<'a> Connect<'a> for TcpStream<net::TcpStream> {
         type Error = TcpError;
 
-        async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), TcpError> {
-            let result = net::TcpStream::connect(&**ip).await;
+        async fn connect(&self, ip: Cow<'a, str>) -> Result<(), TcpError> {
+            let result = net::TcpStream::connect(&*ip).await;
 
             match result {
                 Ok(tcp_stream) => {
@@ -80,7 +86,7 @@ mod std_tcp {
                         Err(_) => Poll::Ready(Err(IoError::UnableToRead)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 },
             }
@@ -97,11 +103,11 @@ mod std_tcp {
                 None => Poll::Ready(Err(IoError::WriteNotConnected)),
                 Some(stream) => match Pin::new(stream).borrow_mut().as_mut().poll_write(cx, buf) {
                     Poll::Ready(result) => match result {
-                        Ok(ok) => Poll::Ready(Ok(ok)),
+                        Ok(size) => Poll::Ready(Ok(size)),
                         Err(_) => Poll::Ready(Err(IoError::UnableToWrite)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 },
             }
@@ -112,11 +118,11 @@ mod std_tcp {
                 None => Poll::Ready(Err(IoError::FlushNotConnected)),
                 Some(stream) => match Pin::new(stream).borrow_mut().as_mut().poll_flush(cx) {
                     Poll::Ready(result) => match result {
-                        Ok(ok) => Poll::Ready(Ok(ok)),
+                        Ok(_) => Poll::Ready(Ok(())),
                         Err(_) => Poll::Ready(Err(IoError::UnableToFlush)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 },
             }
@@ -127,11 +133,11 @@ mod std_tcp {
                 None => Poll::Ready(Err(IoError::ShutdownNotConnected)),
                 Some(stream) => match Pin::new(stream).borrow_mut().as_mut().poll_shutdown(cx) {
                     Poll::Ready(result) => match result {
-                        Ok(ok) => Poll::Ready(Ok(ok)),
+                        Ok(_) => Poll::Ready(Ok(())),
                         Err(_) => Poll::Ready(Err(IoError::UnableToClose)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 },
             }
@@ -151,9 +157,10 @@ mod std_tcp {
 
         use crate::core::framed::IoError;
         use crate::core::io;
-        use crate::core::tcp::{Connect, TcpError};
+        use crate::core::tcp::Connect;
         use crate::Err;
 
+        /// An adapter to implement `embedded::io::{Io, Read, Write}` for `T`.
         pub struct FromTokio<T> {
             inner: T,
         }
@@ -181,8 +188,8 @@ mod std_tcp {
         impl<'a, T: Connect<'a>> Connect<'a> for FromTokio<T> {
             type Error = anyhow::Error;
 
-            async fn connect(&self, ip: &Cow<'a, str>) -> anyhow::Result<()> {
-                match self.inner.connect(&ip).await {
+            async fn connect(&self, ip: Cow<'a, str>) -> anyhow::Result<()> {
+                match self.inner.connect(ip).await {
                     Err(err) => Err!(err),
                     Ok(_) => Ok(()),
                 }

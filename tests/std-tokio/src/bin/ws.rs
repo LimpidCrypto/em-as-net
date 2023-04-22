@@ -14,7 +14,7 @@ use em_as_net::core::tcp::Connect;
 #[tokio::main]
 async fn main() {
     let stream: TcpStream<net::TcpStream> = TcpStream::new();
-    stream.connect(&Cow::from("limpidcrypto.de:6004")).await.unwrap();
+    stream.connect(Cow::from("limpidcrypto.de:6004")).await.unwrap();
 
     let mut stream = Framed::new(stream, Codec::new());
 

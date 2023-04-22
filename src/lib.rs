@@ -4,6 +4,8 @@
 #![feature(async_fn_in_trait)]
 #![feature(ip_in_core)]
 
+#![allow(dead_code)] // Remove eventually
+
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(feature = "std")]

@@ -52,7 +52,7 @@ where
             }
             Some(tls) => {
                 let mut rng = OsRng;
-                let config = TlsConfig::new().with_server_name(&*server_name);
+                let config = TlsConfig::new().with_server_name(&server_name);
                 match tls
                     .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
                     .await
@@ -64,6 +64,16 @@ where
                 }
             }
         }
+    }
+}
+
+impl<'a, S, C> Default for TlsConnection<'a, S, C>
+where
+    S: Read + Write + 'a,
+    C: TlsCipherSuite + 'static,
+{
+    fn default() -> Self {
+        TlsConnection::new()
     }
 }
 
@@ -88,7 +98,7 @@ where
                         Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 }
             }
@@ -110,11 +120,11 @@ where
             None => Poll::Ready(Err(IoError::TlsWriteNotConnected)),
             Some(stream) => match Pin::new(&mut Box::pin(stream.write(buf))).poll(cx) {
                 Poll::Ready(result) => match result {
-                    Ok(ok) => Poll::Ready(Ok(ok)),
+                    Ok(size) => Poll::Ready(Ok(size)),
                     Err(_) => Poll::Ready(Err(IoError::UnableToWrite)),
                 },
                 Poll::Pending => {
-                    return Poll::Pending;
+                    Poll::Pending
                 }
             },
         }
@@ -128,11 +138,11 @@ where
                 let fut_pinned = Pin::new(&mut fut);
                 match fut_pinned.poll(cx) {
                     Poll::Ready(result) => match result {
-                        Ok(ok) => Poll::Ready(Ok(ok)),
+                        Ok(_) => Poll::Ready(Ok(())),
                         Err(_) => Poll::Ready(Err(IoError::UnableToFlush)),
                     },
                     Poll::Pending => {
-                        return Poll::Pending;
+                        Poll::Pending
                     }
                 }
             }
@@ -148,7 +158,7 @@ where
                     Err(_) => Poll::Ready(Err(IoError::UnableToClose)),
                 },
                 Poll::Pending => {
-                    return Poll::Pending;
+                    Poll::Pending
                 }
             },
         }
