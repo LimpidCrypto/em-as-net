@@ -140,78 +140,132 @@ mod std_tcp {
             }
         }
     }
-}
 
-#[cfg(test)]
-#[cfg(feature = "std")]
-mod test_stream {
-    use alloc::borrow::Cow;
+    #[cfg(feature = "tls")]
+    /// An implementation of FromTokio:
+    /// `<https://github.com/embassy-rs/embedded-io/blob/master/src/adapters/tokio.rs>`
+    mod adapters {
+        use alloc::borrow::Cow;
+        use core::pin::Pin;
+        use core::task::Poll;
 
-    use embedded_websocket::{WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType};
-    use embedded_websocket::framer_async::{Framer, ReadResult};
-    use rand_core::RngCore;
-    use tokio::net;
-    use tokio::runtime::Runtime;
+        use embedded_io::asynch::{Read, Write};
+        use embedded_io::Io;
 
-    use crate::core::tcp::Connect;
+        use crate::core::framed::IoError;
+        use crate::core::io;
+        use crate::core::tcp::{Connect, TcpError};
+        use crate::Err;
 
-    use super::super::framed::{codec::Codec, Framed};
-    use super::TcpStream;
+        pub struct FromTokio<T> {
+            inner: T,
+        }
 
-    #[test]
-    fn test() {
-        async fn main_task() {
-            // define an empty `TcpStream`
-            let stream: TcpStream<net::TcpStream> = TcpStream::new();
-            stream.connect(&Cow::from("ws.vi-server.org:80")).await.unwrap();
-            let mut stream = Framed::new(stream, Codec::new());
+        impl<T> FromTokio<T> {
+            pub fn new(inner: T) -> Self {
+                Self { inner }
+            }
 
-            let rng = rand::thread_rng();
-            let ws = WebSocketClient::new_client(rng);
+            pub fn into_inner(self) -> T {
+                self.inner
+            }
+        }
 
-            let websocket_options = WebSocketOptions {
-                path: "/mirror",
-                host: "ws.vi-server.org",
-                origin: "http://ws.vi-server.org:80",
-                sub_protocols: None,
-                additional_headers: None,
-            };
+        impl<T> FromTokio<T> {
+            pub fn inner(&self) -> &T {
+                &self.inner
+            }
 
-            let mut buffer = [0u8; 4096];
-            let mut framer = Framer::new(ws);
-            framer.connect(&mut stream, &mut buffer, &websocket_options).await.unwrap();
-
-            framer
-                .write(
-                    &mut stream,
-                    &mut buffer,
-                    WebSocketSendMessageType::Text,
-                    true,
-                    "Hello, world".as_bytes(),
-                )
-                .await.unwrap();
-
-            while let Some(read_result) = framer.read(&mut stream, &mut buffer).await {
-                let read_result = read_result.unwrap();
-                match read_result {
-                    ReadResult::Text(text) => {
-                        framer
-                            .close(
-                                &mut stream,
-                                &mut buffer,
-                                WebSocketCloseStatusCode::NormalClosure,
-                                None,
-                            )
-                            .await.unwrap()
-                    }
-                    _ => { // ignore other kinds of messages
-                    }
+            pub fn inner_mut(&mut self) -> &mut T {
+                &mut self.inner
+            }
+        }
+        
+        impl<'a, T: Connect<'a>> Connect<'a> for FromTokio<T> {
+            type Error = anyhow::Error;
+            
+            async fn connect(&self, ip: &Cow<'a, str>) -> anyhow::Result<()> {
+                match self.inner.connect(&ip).await {
+                    Err(err) => Err!(err),
+                    Ok(_) => Ok(())
                 }
             }
         }
 
-        let runtime = Runtime::new().unwrap();
-        runtime.block_on(main_task())
+        impl<T> Io for FromTokio<T> {
+            type Error = IoError;
+        }
+
+        impl<T: io::AsyncRead + Unpin> Read for FromTokio<T> {
+            async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+                poll_fn::poll_fn(|cx| {
+                    let mut buf = tokio::io::ReadBuf::new(buf);
+                    match Pin::new(&mut self.inner).poll_read(cx, &mut buf) {
+                        Poll::Ready(r) => match r {
+                            Ok(()) => Poll::Ready(Ok(buf.filled().len())),
+                            Err(_) => Poll::Ready(Err(IoError::AdapterTokioReadNotConnected)),
+                        },
+                        Poll::Pending => Poll::Pending,
+                    }
+                }).await
+            }
+        }
+
+        impl<T: io::AsyncWrite + Unpin> Write for FromTokio<T> {
+            async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+                poll_fn::poll_fn(|cx| {
+                    match Pin::new(&mut self.inner).poll_write(cx, buf) {
+                        Poll::Ready(r) => match r {
+                            Ok(size) => Poll::Ready(Ok(size)),
+                            Err(_) => Poll::Ready(Err(IoError::AdapterTokioWriteNotConnected)),
+                        },
+                        Poll::Pending => Poll::Pending,
+                    }
+                }).await
+            }
+
+            async fn flush(&mut self) -> Result<(), Self::Error> {
+                poll_fn::poll_fn(|cx| {
+                    match Pin::new(&mut self.inner).poll_flush(cx) {
+                        Poll::Ready(r) => match r {
+                            Ok(_) => Poll::Ready(Ok(())),
+                            Err(_) => Poll::Ready(Err(IoError::AdapterTokioFlushNotConnected)),
+                        },
+                        Poll::Pending => Poll::Pending,
+                    }
+                }).await
+            }
+        }
+
+
+        mod poll_fn {
+            use core::future::Future;
+            use core::pin::Pin;
+            use core::task::{Context, Poll};
+
+            struct PollFn<F> {
+                f: F,
+            }
+
+            impl<F> Unpin for PollFn<F> {}
+
+            pub fn poll_fn<T, F>(f: F) -> impl Future<Output = T>
+                where
+                    F: FnMut(&mut Context<'_>) -> Poll<T>,
+            {
+                PollFn { f }
+            }
+
+            impl<T, F> Future for PollFn<F>
+                where
+                    F: FnMut(&mut Context<'_>) -> Poll<T>,
+            {
+                type Output = T;
+
+                fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
+                    (&mut self.f)(cx)
+                }
+            }
+        }
     }
 }
-
