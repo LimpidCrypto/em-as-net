@@ -4,7 +4,6 @@
 
 use core::fmt;
 use core::mem::MaybeUninit;
-use bytes::BufMut;
 
 pub struct ReadBuf<'a> {
     buf: &'a mut [MaybeUninit<u8>],
@@ -160,25 +159,6 @@ impl<'a> ReadBuf<'a> {
             self.initialized = end;
         }
         self.filled = end;
-    }
-}
-
-unsafe impl<'a> BufMut for ReadBuf<'a> {
-    fn remaining_mut(&self) -> usize {
-        self.remaining()
-    }
-
-    unsafe fn advance_mut(&mut self, cnt: usize) {
-        self.assume_init(cnt);
-        self.advance(cnt);
-    }
-
-    fn chunk_mut(&mut self) -> &mut bytes::buf::UninitSlice {
-        let unfilled = unsafe { self.unfilled_mut() };
-        let len = unfilled.len();
-        let ptr = unfilled.as_mut_ptr() as *mut u8;
-
-        unsafe { bytes::buf::UninitSlice::from_raw_parts_mut(ptr, len) }
     }
 }
 
