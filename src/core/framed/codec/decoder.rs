@@ -1,7 +1,7 @@
-use core::fmt::Display;
-use bytes::BytesMut;
 use crate::core::framed::{Framed, IoError};
 use crate::core::io::{AsyncRead, AsyncWrite};
+use bytes::BytesMut;
+use core::fmt::Display;
 
 pub trait Decoder {
     type Item;

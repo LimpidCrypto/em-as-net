@@ -1,6 +1,5 @@
-use core::fmt::Display;
 use bytes::BytesMut;
-use crate::core::framed::IoError;
+use core::fmt::Display;
 
 pub trait Encoder<Item> {
     type Error: Display;

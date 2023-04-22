@@ -31,7 +31,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            inner: RefCell::new(None)
+            inner: RefCell::new(None),
         }
     }
 
@@ -39,24 +39,31 @@ where
         &self,
         server_name: Cow<'a, str>,
         delegate: S,
-        read_buffer: &'a mut [u8],write_buffer: &'a mut [u8]
+        read_buffer: &'a mut [u8],
+        write_buffer: &'a mut [u8],
     ) -> anyhow::Result<()> {
         let tls: embedded_tls::TlsConnection<S, C> =
             embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer);
 
         self.inner.replace(Some(tls));
         match self.inner.borrow_mut().as_mut() {
-            None => { Err!(TlsError::NotConnected) }
+            None => {
+                Err!(TlsError::NotConnected)
+            }
             Some(tls) => {
                 let mut rng = OsRng;
                 let config = TlsConfig::new().with_server_name(&*server_name);
-                match tls.open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng)).await {
-                    Err(_) => { Err!(TlsError::FailedToOpen) }
-                    Ok(_) => { Ok(()) }
+                match tls
+                    .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
+                    .await
+                {
+                    Err(_) => {
+                        Err!(TlsError::FailedToOpen)
+                    }
+                    Ok(_) => Ok(()),
                 }
             }
         }
-
     }
 }
 
@@ -67,18 +74,22 @@ where
 {
     type Error = IoError;
 
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         match self.inner.borrow_mut().as_mut() {
-            None => { Poll::Ready(Err(IoError::TlsReadNotConnected)) }
+            None => Poll::Ready(Err(IoError::TlsReadNotConnected)),
             Some(stream) => {
                 match Pin::new(&mut Box::pin(stream.read(buf.initialized_mut()))).poll(cx) {
-                    Poll::Ready(result) => {
-                        match result {
-                            Ok(_) => { Poll::Ready(Ok(())) }
-                            Err(_) => { Poll::Ready(Err(IoError::DecodeWhileReadError)) }
-                        }
+                    Poll::Ready(result) => match result {
+                        Ok(_) => Poll::Ready(Ok(())),
+                        Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
                     },
-                    Poll::Pending => { return Poll::Pending; }
+                    Poll::Pending => {
+                        return Poll::Pending;
+                    }
                 }
             }
         }
@@ -90,37 +101,39 @@ where
     S: Read + Write + 'a,
     C: TlsCipherSuite + 'static,
 {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, IoError>> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, IoError>> {
         match self.inner.borrow_mut().as_mut() {
-            None => {Poll::Ready(Err(IoError::TlsWriteNotConnected))}
-            Some(stream) => {
-                match Pin::new(&mut Box::pin(stream.write(buf))).poll(cx) {
-                    Poll::Ready(result) => {
-                        match result {
-                            Ok(ok) => {Poll::Ready(Ok(ok))}
-                            Err(_) => {Poll::Ready(Err(IoError::UnableToWrite))}
-                        }
-                    }
-                    Poll::Pending => {return Poll::Pending;}
+            None => Poll::Ready(Err(IoError::TlsWriteNotConnected)),
+            Some(stream) => match Pin::new(&mut Box::pin(stream.write(buf))).poll(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(ok) => Poll::Ready(Ok(ok)),
+                    Err(_) => Poll::Ready(Err(IoError::UnableToWrite)),
+                },
+                Poll::Pending => {
+                    return Poll::Pending;
                 }
-            }
+            },
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         match self.inner.borrow_mut().as_mut() {
-            None => {Poll::Ready(Err(IoError::TlsFlushNotConnected))}
+            None => Poll::Ready(Err(IoError::TlsFlushNotConnected)),
             Some(stream) => {
                 let mut fut = Box::pin(stream.flush());
                 let fut_pinned = Pin::new(&mut fut);
                 match fut_pinned.poll(cx) {
-                    Poll::Ready(result) => {
-                        match result {
-                            Ok(ok) => {Poll::Ready(Ok(ok))}
-                            Err(_) => {Poll::Ready(Err(IoError::UnableToFlush))}
-                        }
+                    Poll::Ready(result) => match result {
+                        Ok(ok) => Poll::Ready(Ok(ok)),
+                        Err(_) => Poll::Ready(Err(IoError::UnableToFlush)),
+                    },
+                    Poll::Pending => {
+                        return Poll::Pending;
                     }
-                    Poll::Pending => {return Poll::Pending;}
                 }
             }
         }
@@ -128,18 +141,16 @@ where
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         match self.inner.take() {
-            None => {Poll::Ready(Err(IoError::TlsShutdownNotConnected))}
-            Some(stream) => {
-                match Pin::new(&mut Box::pin(stream.close())).poll(cx) {
-                    Poll::Ready(result) => {
-                        match result {
-                            Ok(_) => {Poll::Ready(Ok(()))}
-                            Err(_) => {Poll::Ready(Err(IoError::UnableToClose))}
-                        }
-                    }
-                    Poll::Pending => {return Poll::Pending;}
+            None => Poll::Ready(Err(IoError::TlsShutdownNotConnected)),
+            Some(stream) => match Pin::new(&mut Box::pin(stream.close())).poll(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(_) => Poll::Ready(Ok(())),
+                    Err(_) => Poll::Ready(Err(IoError::UnableToClose)),
+                },
+                Poll::Pending => {
+                    return Poll::Pending;
                 }
-            }
+            },
         }
     }
 }

@@ -10,10 +10,10 @@ use framed_impl::{FramedImpl, RWFrames, ReadFrame, WriteFrame};
 pub mod errors;
 pub use errors::*;
 
+use bytes::BytesMut;
 use core::fmt;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use bytes::BytesMut;
 use futures::{Sink, Stream};
 use pin_project_lite::pin_project;
 
@@ -21,7 +21,7 @@ use super::io::{AsyncRead, AsyncWrite};
 
 pub use errors::IoError;
 
-use codec::{Encoder, Decoder};
+use codec::{Decoder, Encoder};
 
 pin_project! {
     pub struct Framed<T, U> {
@@ -31,8 +31,8 @@ pin_project! {
 }
 
 impl<T, U> Framed<T, U>
-    where
-        T: AsyncRead + AsyncWrite,
+where
+    T: AsyncRead + AsyncWrite,
 {
     pub fn new(inner: T, codec: U) -> Framed<T, U> {
         Framed {
@@ -119,9 +119,9 @@ impl<T, U> Framed<T, U> {
 
 // This impl just defers to the underlying FramedImpl
 impl<T, U> Stream for Framed<T, U>
-    where
-        T: AsyncRead,
-        U: Decoder,
+where
+    T: AsyncRead,
+    U: Decoder,
 {
     type Item = Result<U::Item, anyhow::Error>;
 
@@ -132,9 +132,9 @@ impl<T, U> Stream for Framed<T, U>
 
 // This impl just defers to the underlying FramedImpl
 impl<T, I, U> Sink<I> for Framed<T, U>
-    where
-        T: AsyncWrite,
-        U: Encoder<I>,
+where
+    T: AsyncWrite,
+    U: Encoder<I>,
 {
     type Error = anyhow::Error;
 
@@ -156,9 +156,9 @@ impl<T, I, U> Sink<I> for Framed<T, U>
 }
 
 impl<T, U> fmt::Debug for Framed<T, U>
-    where
-        T: fmt::Debug,
-        U: fmt::Debug,
+where
+    T: fmt::Debug,
+    U: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Framed")

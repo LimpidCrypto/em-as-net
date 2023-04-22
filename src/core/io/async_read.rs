@@ -29,15 +29,11 @@ macro_rules! deref_async_read {
             buf: &mut ReadBuf<'_>,
         ) -> Poll<Result<(), Self::Error>> {
             match Pin::new(&mut **self).poll_read(cx, buf) {
-                Poll::Ready(result) => {
-                    match result {
-                        Ok(_) => {
-                            Poll::Ready(Ok(()))
-                        }
-                        Err(_) => {Poll::Ready(Err(IoError::DecodeWhileReadError))}
-                    }
-                }
-                Poll::Pending => {Poll::Pending}
+                Poll::Ready(result) => match result {
+                    Ok(_) => Poll::Ready(Ok(())),
+                    Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
     };
@@ -56,9 +52,9 @@ impl<T: ?Sized + AsyncRead + Unpin> AsyncRead for &mut T {
 }
 
 impl<P> AsyncRead for Pin<P>
-    where
-        P: DerefMut + Unpin,
-        P::Target: AsyncRead,
+where
+    P: DerefMut + Unpin,
+    P::Target: AsyncRead,
 {
     type Error = IoError;
 
@@ -68,15 +64,11 @@ impl<P> AsyncRead for Pin<P>
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<(), Self::Error>> {
         match self.get_mut().as_mut().poll_read(cx, buf) {
-            Poll::Ready(result) => {
-                match result {
-                    Ok(_) => {
-                        Poll::Ready(Ok(()))
-                    }
-                    Err(_) => {Poll::Ready(Err(IoError::DecodeWhileReadError))}
-                }
-            }
-            Poll::Pending => {Poll::Pending}
+            Poll::Ready(result) => match result {
+                Ok(_) => Poll::Ready(Ok(())),
+                Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
+            },
+            Poll::Pending => Poll::Pending,
         }
     }
 }

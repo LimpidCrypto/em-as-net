@@ -16,7 +16,10 @@ impl<'a> IoSlice<'a> {
     #[inline]
     pub fn new(buf: &'a [u8]) -> IoSlice<'a> {
         IoSlice {
-            vec: iovec { iov_base: buf.as_ptr() as *mut u8 as *mut c_void, iov_len: buf.len() },
+            vec: iovec {
+                iov_base: buf.as_ptr() as *mut u8 as *mut c_void,
+                iov_len: buf.len(),
+            },
             _p: PhantomData,
         }
     }
@@ -55,7 +58,10 @@ impl<'a> IoSlice<'a> {
 
         *bufs = &mut replace(bufs, &mut [])[remove..];
         if bufs.is_empty() {
-            assert_eq!(n, accumulated_len, "advancing io slices beyond their length");
+            assert_eq!(
+                n, accumulated_len,
+                "advancing io slices beyond their length"
+            );
         } else {
             bufs[0].advance(n - accumulated_len)
         }
@@ -91,7 +97,10 @@ impl<'a> IoSliceMut<'a> {
     #[inline]
     pub fn new(buf: &'a mut [u8]) -> IoSliceMut<'a> {
         IoSliceMut {
-            vec: iovec { iov_base: buf.as_mut_ptr() as *mut c_void, iov_len: buf.len() },
+            vec: iovec {
+                iov_base: buf.as_mut_ptr() as *mut c_void,
+                iov_len: buf.len(),
+            },
             _p: PhantomData,
         }
     }
@@ -135,7 +144,10 @@ impl<'a> IoSliceMut<'a> {
 
         *bufs = &mut replace(bufs, &mut [])[remove..];
         if bufs.is_empty() {
-            assert_eq!(n, accumulated_len, "advancing io slices beyond their length");
+            assert_eq!(
+                n, accumulated_len,
+                "advancing io slices beyond their length"
+            );
         } else {
             bufs[0].advance(n - accumulated_len)
         }

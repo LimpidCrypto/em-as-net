@@ -1,5 +1,8 @@
 //! A no_std implementation of https://github.com/tokio-rs/tokio/blob/master/tokio-util/src/codec/framed_impl.rs
 
+use super::super::io::{io_slice::IoSlice, AsyncRead, AsyncWrite};
+use super::codec::{Decoder, Encoder};
+use super::errors::IoError;
 use anyhow::Result;
 use bytes::{Buf, BufMut, BytesMut};
 use core::borrow::{Borrow, BorrowMut};
@@ -8,15 +11,12 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 use futures::{ready, Sink, Stream};
 use pin_project_lite::pin_project;
-use super::super::io::{AsyncWrite, AsyncRead, io_slice::IoSlice};
-use super::codec::{Encoder, Decoder};
-use super::errors::IoError;
 
-#[cfg(feature = "std")]
-use tokio::io::ReadBuf;
 #[cfg(not(feature = "std"))]
 use crate::core::io::ReadBuf;
 use crate::Err;
+#[cfg(feature = "std")]
+use tokio::io::ReadBuf;
 
 const INITIAL_CAPACITY: usize = 8 * 1024;
 
@@ -93,7 +93,10 @@ impl From<BytesMut> for WriteFrame {
             buffer.reserve(INITIAL_CAPACITY - size);
         }
 
-        Self { buffer, backpressure_boundary: INITIAL_CAPACITY, }
+        Self {
+            buffer,
+            backpressure_boundary: INITIAL_CAPACITY,
+        }
     }
 }
 
@@ -119,10 +122,10 @@ impl BorrowMut<WriteFrame> for RWFrames {
 }
 
 impl<T, U, R> Stream for FramedImpl<T, U, R>
-    where
-        T: AsyncRead,
-        U: Decoder,
-        R: BorrowMut<ReadFrame>,
+where
+    T: AsyncRead,
+    U: Decoder,
+    R: BorrowMut<ReadFrame>,
 {
     type Item = Result<U::Item, anyhow::Error>;
 
@@ -156,19 +159,21 @@ impl<T, U, R> Stream for FramedImpl<T, U, R>
                 if let Some(frame) = match pinned.codec.decode(&mut state.buffer) {
                     Err(err) => {
                         state.has_errored = true;
-                        return Poll::Ready(Some(Err!(err)))
+                        return Poll::Ready(Some(Err!(err)));
                     }
-                    Ok(ok) => {
-                        ok
-                    }
-                } { return Poll::Ready(Some(Ok(frame))) }
+                    Ok(ok) => ok,
+                } {
+                    return Poll::Ready(Some(Ok(frame)));
+                }
 
                 state.is_readable = false;
             }
 
             state.buffer.reserve(1);
             match poll_read_buf(pinned.inner.as_mut(), cx, &mut state.buffer) {
-                Poll::Pending => { return Poll::Pending; },
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
                 Poll::Ready(bytect_res) => match bytect_res {
                     Err(err) => {
                         return Poll::Ready(Some(Err!(err)));
@@ -185,18 +190,17 @@ impl<T, U, R> Stream for FramedImpl<T, U, R>
 
                         state.is_readable = true;
                     }
-                }
+                },
             };
-
         }
     }
 }
 
 impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
-    where
-        T: AsyncWrite,
-        U: Encoder<I>,
-        W: BorrowMut<WriteFrame>,
+where
+    T: AsyncWrite,
+    U: Encoder<I>,
+    W: BorrowMut<WriteFrame>,
 {
     type Error = anyhow::Error;
 
@@ -212,9 +216,12 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
         let pinned = self.project();
         match pinned
             .codec
-            .encode(item, &mut pinned.state.borrow_mut().buffer) {
-            Ok(_) => { Ok(()) }
-            Err(_) => { Err!(IoError::EncodeWhileSendError) }
+            .encode(item, &mut pinned.state.borrow_mut().buffer)
+        {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                Err!(IoError::EncodeWhileSendError)
+            }
         }
     }
 
@@ -225,7 +232,9 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
             let WriteFrame { buffer, .. } = pinned.state.borrow_mut();
 
             match ready!(poll_write_buf(pinned.inner.as_mut(), cx, buffer)) {
-                Err(e) => { return Poll::Ready(Err!(e)); }
+                Err(e) => {
+                    return Poll::Ready(Err!(e));
+                }
                 Ok(n) => {
                     if n == 0 {
                         return Poll::Ready(Err!(IoError::FailedToFlush));
@@ -237,8 +246,8 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
         }
 
         match ready!(pinned.inner.poll_flush(cx)) {
-            Err(e) => { return Poll::Ready(Err!(e)) }
-            Ok(_) => { return Poll::Ready(Ok(())) }
+            Err(e) => return Poll::Ready(Err!(e)),
+            Ok(_) => return Poll::Ready(Ok(())),
         }
 
         Poll::Ready(Ok(()))
@@ -246,13 +255,13 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         match ready!(self.as_mut().poll_flush(cx)) {
-            Err(e) => { return Poll::Ready(Err!(e)) }
-            Ok(_) => { return Poll::Ready(Ok(())) }
+            Err(e) => return Poll::Ready(Err!(e)),
+            Ok(_) => return Poll::Ready(Ok(())),
         }
 
         match ready!(self.project().inner.poll_shutdown(cx)) {
-            Err(e) => { return Poll::Ready(Err!(e)) }
-            Ok(_) => { return Poll::Ready(Ok(())) }
+            Err(e) => return Poll::Ready(Err!(e)),
+            Ok(_) => return Poll::Ready(Ok(())),
         }
 
         Poll::Ready(Ok(()))
@@ -316,8 +325,7 @@ pub fn poll_write_buf<T: AsyncWrite, B: Buf>(
     Poll::Ready(Ok(n))
 }
 
-fn chunks_vectored<'a, B: Buf>(buf: &'a B, dst: &mut [IoSlice<'a>]) -> usize
-{
+fn chunks_vectored<'a, B: Buf>(buf: &'a B, dst: &mut [IoSlice<'a>]) -> usize {
     if dst.is_empty() {
         return 0;
     }

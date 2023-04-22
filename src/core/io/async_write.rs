@@ -61,7 +61,10 @@ macro_rules! deref_async_write {
             Pin::new(&mut **self).poll_flush(cx)
         }
 
-        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
+        fn poll_shutdown(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), IoError>> {
             Pin::new(&mut **self).poll_shutdown(cx)
         }
     };
@@ -76,9 +79,9 @@ impl<T: ?Sized + AsyncWrite + Unpin> AsyncWrite for &mut T {
 }
 
 impl<P> AsyncWrite for Pin<P>
-    where
-        P: DerefMut + Unpin,
-        P::Target: AsyncWrite,
+where
+    P: DerefMut + Unpin,
+    P::Target: AsyncWrite,
 {
     fn poll_write(
         self: Pin<&mut Self>,
