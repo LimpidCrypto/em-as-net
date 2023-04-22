@@ -1,10 +1,11 @@
+use core::fmt::Display;
 use bytes::BytesMut;
-use crate::core::framed::{Framed, FramedException};
-use super::super::super::io::{AsyncRead, AsyncWrite};
+use crate::core::framed::{Framed, IoError};
+use crate::core::io::{AsyncRead, AsyncWrite};
 
 pub trait Decoder {
     type Item;
-    type Error: From<FramedException>;
+    type Error: From<IoError> + Display;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error>;
 
@@ -15,15 +16,15 @@ pub trait Decoder {
                 if buf.is_empty() {
                     Ok(None)
                 } else {
-                    Err(FramedException::DecodeError.into())
+                    Err(IoError::DecodeError.into())
                 }
             }
         }
     }
 
     fn framed<T: AsyncRead + AsyncWrite + Sized>(self, io: T) -> Framed<T, Self>
-        where
-            Self: Sized,
+    where
+        Self: Sized,
     {
         Framed::new(io, self)
     }

@@ -1,5 +1,6 @@
 //! A no_std implementation of https://github.com/tokio-rs/tokio/blob/master/tokio-util/src/codec/framed_impl.rs
 
+use anyhow::Result;
 use bytes::{Buf, BufMut, BytesMut};
 use core::borrow::{Borrow, BorrowMut};
 use core::mem::MaybeUninit;
@@ -9,12 +10,13 @@ use futures::{ready, Sink, Stream};
 use pin_project_lite::pin_project;
 use super::super::io::{AsyncWrite, AsyncRead, io_slice::IoSlice};
 use super::codec::{Encoder, Decoder};
-use super::exceptions::FramedException;
+use super::errors::IoError;
 
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
 #[cfg(not(feature = "std"))]
 use crate::core::io::ReadBuf;
+use crate::Err;
 
 const INITIAL_CAPACITY: usize = 8 * 1024;
 
@@ -116,19 +118,13 @@ impl BorrowMut<WriteFrame> for RWFrames {
     }
 }
 
-
-/*
-TODO: Wake `cx`
- */
-
-
 impl<T, U, R> Stream for FramedImpl<T, U, R>
     where
         T: AsyncRead,
         U: Decoder,
         R: BorrowMut<ReadFrame>,
 {
-    type Item = Result<U::Item, U::Error>;
+    type Item = Result<U::Item, anyhow::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut pinned = self.project();
@@ -143,43 +139,55 @@ impl<T, U, R> Stream for FramedImpl<T, U, R>
 
             if state.is_readable {
                 if state.eof {
-                    let frame = pinned.codec.decode_eof(&mut state.buffer).map_err(|err| {
-                        state.has_errored = true;
-                        err
-                    })?;
-                    if frame.is_none() {
-                        state.is_readable = false;
+                    match pinned.codec.decode_eof(&mut state.buffer) {
+                        Err(err) => {
+                            state.has_errored = true;
+                            return Poll::Ready(Some(Err!(err)));
+                        }
+                        Ok(frame) => {
+                            if frame.is_none() {
+                                state.is_readable = false;
+                            }
+                            return Poll::Ready(frame.map(Ok));
+                        }
                     }
-                    return Poll::Ready(frame.map(Ok));
                 }
 
-                if let Some(frame) = pinned.codec.decode(&mut state.buffer).map_err(|op| {
-                    state.has_errored = true;
-                    op
-                })? {
-                    return Poll::Ready(Some(Ok(frame)));
-                }
+                if let Some(frame) = match pinned.codec.decode(&mut state.buffer) {
+                    Err(err) => {
+                        state.has_errored = true;
+                        return Poll::Ready(Some(Err!(err)))
+                    }
+                    Ok(ok) => {
+                        ok
+                    }
+                } { return Poll::Ready(Some(Ok(frame))) }
 
                 state.is_readable = false;
             }
 
             state.buffer.reserve(1);
-            let bytect = match poll_read_buf(pinned.inner.as_mut(), cx, &mut state.buffer).map_err(
-                |_| {FramedException::UnableToRead}
-            )? {
-                Poll::Ready(ct) => ct,
-                Poll::Pending => return Poll::Pending,
-            };
-            if bytect == 0 {
-                if state.eof {
-                    return Poll::Ready(None);
-                }
-                state.eof = true;
-            } else {
-                state.eof = false;
-            }
+            match poll_read_buf(pinned.inner.as_mut(), cx, &mut state.buffer) {
+                Poll::Pending => { return Poll::Pending; },
+                Poll::Ready(bytect_res) => match bytect_res {
+                    Err(err) => {
+                        return Poll::Ready(Some(Err!(err)));
+                    }
+                    Ok(bytect) => {
+                        if bytect == 0 {
+                            if state.eof {
+                                return Poll::Ready(None);
+                            }
+                            state.eof = true;
+                        } else {
+                            state.eof = false;
+                        }
 
-            state.is_readable = true;
+                        state.is_readable = true;
+                    }
+                }
+            };
+
         }
     }
 }
@@ -190,9 +198,9 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
         U: Encoder<I>,
         W: BorrowMut<WriteFrame>,
 {
-    type Error = FramedException;
+    type Error = anyhow::Error;
 
-    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         if self.state.borrow().buffer.len() >= self.state.borrow().backpressure_boundary {
             self.as_mut().poll_flush(cx)
         } else {
@@ -200,37 +208,52 @@ impl<T, I, U, W> Sink<I> for FramedImpl<T, U, W>
         }
     }
 
-    fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: I) -> Result<()> {
         let pinned = self.project();
         match pinned
             .codec
             .encode(item, &mut pinned.state.borrow_mut().buffer) {
             Ok(_) => { Ok(()) }
-            Err(_) => { Err(FramedException::UnableToEncode) }
+            Err(_) => { Err!(IoError::EncodeWhileSendError) }
         }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         let mut pinned = self.project();
 
         while !pinned.state.borrow_mut().buffer.is_empty() {
             let WriteFrame { buffer, .. } = pinned.state.borrow_mut();
 
-            let n = ready!(poll_write_buf(pinned.inner.as_mut(), cx, buffer))?;
-
-            if n == 0 {
-                return Poll::Ready(Err(FramedException::UnableToFlush));
+            match ready!(poll_write_buf(pinned.inner.as_mut(), cx, buffer)) {
+                Err(e) => { return Poll::Ready(Err!(e)); }
+                Ok(n) => {
+                    if n == 0 {
+                        return Poll::Ready(Err!(IoError::FailedToFlush));
+                    } else {
+                        return Poll::Ready(Ok(()));
+                    }
+                }
             }
         }
 
-        ready!(pinned.inner.poll_flush(cx))?;
+        match ready!(pinned.inner.poll_flush(cx)) {
+            Err(e) => { return Poll::Ready(Err!(e)) }
+            Ok(_) => { return Poll::Ready(Ok(())) }
+        }
 
         Poll::Ready(Ok(()))
     }
 
-    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        ready!(self.as_mut().poll_flush(cx))?;
-        ready!(self.project().inner.poll_shutdown(cx))?;
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        match ready!(self.as_mut().poll_flush(cx)) {
+            Err(e) => { return Poll::Ready(Err!(e)) }
+            Ok(_) => { return Poll::Ready(Ok(())) }
+        }
+
+        match ready!(self.project().inner.poll_shutdown(cx)) {
+            Err(e) => { return Poll::Ready(Err!(e)) }
+            Ok(_) => { return Poll::Ready(Ok(())) }
+        }
 
         Poll::Ready(Ok(()))
     }
@@ -273,7 +296,7 @@ pub fn poll_write_buf<T: AsyncWrite, B: Buf>(
     io: Pin<&mut T>,
     cx: &mut Context<'_>,
     buf: &mut B,
-) -> Poll<Result<usize, FramedException>> {
+) -> Poll<Result<usize, IoError>> {
     const MAX_BUFS: usize = 64;
 
     if !buf.has_remaining() {

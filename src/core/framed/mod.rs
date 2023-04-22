@@ -1,13 +1,14 @@
 //! A no_std version of `tokio::Framed`
 
+use anyhow::Result;
 pub mod codec;
 pub use codec::Codec;
 
 mod framed_impl;
 use framed_impl::{FramedImpl, RWFrames, ReadFrame, WriteFrame};
 
-pub mod exceptions;
-pub use exceptions::*;
+pub mod errors;
+pub use errors::*;
 
 use core::fmt;
 use core::pin::Pin;
@@ -18,7 +19,7 @@ use pin_project_lite::pin_project;
 
 use super::io::{AsyncRead, AsyncWrite};
 
-pub use exceptions::FramedException;
+pub use errors::IoError;
 
 use codec::{Encoder, Decoder};
 
@@ -122,7 +123,7 @@ impl<T, U> Stream for Framed<T, U>
         T: AsyncRead,
         U: Decoder,
 {
-    type Item = Result<U::Item, U::Error>;
+    type Item = Result<U::Item, anyhow::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.project().inner.poll_next(cx)
@@ -135,21 +136,21 @@ impl<T, I, U> Sink<I> for Framed<T, U>
         T: AsyncWrite,
         U: Encoder<I>,
 {
-    type Error = FramedException;
+    type Error = anyhow::Error;
 
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         self.project().inner.poll_ready(cx)
     }
 
-    fn start_send(self: Pin<&mut Self>, item: I) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: I) -> Result<()> {
         self.project().inner.start_send(item)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         self.project().inner.poll_flush(cx)
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         self.project().inner.poll_close(cx)
     }
 }

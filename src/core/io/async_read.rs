@@ -1,17 +1,18 @@
 use alloc::boxed::Box;
-use core::fmt::Debug;
+use core::fmt::{Debug, Display};
 use core::ops::DerefMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use crate::core::framed::FramedException;
 
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
+
+use crate::core::framed::IoError;
 #[cfg(not(feature = "std"))]
 use crate::core::io::ReadBuf;
 
 pub trait AsyncRead {
-    type Error: Debug;
+    type Error: Debug + Display;
 
     fn poll_read(
         self: Pin<&mut Self>,
@@ -33,7 +34,7 @@ macro_rules! deref_async_read {
                         Ok(_) => {
                             Poll::Ready(Ok(()))
                         }
-                        Err(_) => {Poll::Ready(Err(FramedException::UnableToRead))}
+                        Err(_) => {Poll::Ready(Err(IoError::DecodeWhileReadError))}
                     }
                 }
                 Poll::Pending => {Poll::Pending}
@@ -43,13 +44,13 @@ macro_rules! deref_async_read {
 }
 
 impl<T: ?Sized + AsyncRead + Unpin> AsyncRead for Box<T> {
-    type Error = FramedException;
+    type Error = IoError;
 
     deref_async_read!();
 }
 
 impl<T: ?Sized + AsyncRead + Unpin> AsyncRead for &mut T {
-    type Error = FramedException;
+    type Error = IoError;
 
     deref_async_read!();
 }
@@ -59,7 +60,7 @@ impl<P> AsyncRead for Pin<P>
         P: DerefMut + Unpin,
         P::Target: AsyncRead,
 {
-    type Error = FramedException;
+    type Error = IoError;
 
     fn poll_read(
         self: Pin<&mut Self>,
@@ -72,7 +73,7 @@ impl<P> AsyncRead for Pin<P>
                     Ok(_) => {
                         Poll::Ready(Ok(()))
                     }
-                    Err(_) => {Poll::Ready(Err(FramedException::UnableToRead))}
+                    Err(_) => {Poll::Ready(Err(IoError::DecodeWhileReadError))}
                 }
             }
             Poll::Pending => {Poll::Pending}

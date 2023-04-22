@@ -3,9 +3,6 @@ mod read_buf;
 #[cfg(not(feature = "std"))]
 pub(crate) use read_buf::ReadBuf;
 
-pub mod exceptions;
-pub use exceptions::*;
-
 pub mod async_read;
 pub use async_read::AsyncRead;
 

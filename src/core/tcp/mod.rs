@@ -1,14 +1,17 @@
 use alloc::borrow::Cow;
+use core::fmt::{Debug, Display};
 
-pub use exceptions::*;
+pub use errors::*;
+#[cfg(all(feature = "std", feature = "tls"))]
+pub use std_tcp::FromTokio;
 #[cfg(feature = "std")]
 pub use std_tcp::TcpStream;
 
 pub mod tls;
-pub mod exceptions;
+pub mod errors;
 
 pub trait Connect<'a> {
-    type Error;
+    type Error: Debug + Display;
 
     async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), Self::Error>;
 }
@@ -24,14 +27,17 @@ mod std_tcp {
     use tokio::io::{AsyncRead, AsyncWrite};
     use tokio::net;
 
-    use crate::core::framed::FramedException;
+    #[cfg(feature = "tls")]
+    pub use adapters::FromTokio;
+
+    use crate::core::framed::IoError;
     use crate::core::io;
 
     use super::Connect;
-    use super::exceptions::TcpException;
+    use super::errors::TcpError;
 
     pub struct TcpStream<T> {
-        stream: RefCell<Option<T>>,
+        pub(crate) stream: RefCell<Option<T>>,
     }
 
     impl<T> TcpStream<T> {
@@ -43,9 +49,9 @@ mod std_tcp {
     }
 
     impl<'a> Connect<'a> for TcpStream<net::TcpStream> {
-        type Error = TcpException;
+        type Error = TcpError;
 
-        async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), TcpException> {
+        async fn connect(&self, ip: &Cow<'a, str>) -> Result<(), TcpError> {
             let result = net::TcpStream::connect(&**ip).await;
 
             match result {
@@ -55,24 +61,24 @@ mod std_tcp {
                     Ok(())
                 }
                 Err(_) => {
-                    Err(TcpException::UnableToConnect)
+                    Err(TcpError::UnableToConnect)
                 }
             }
         }
     }
 
     impl io::AsyncRead for TcpStream<net::TcpStream> {
-        type Error = FramedException;
+        type Error = IoError;
 
         fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<Result<(), Self::Error>> {
             match self.stream.borrow_mut().as_mut() {
-                None => {Poll::Ready(Err(FramedException::UnableToRead))}
+                None => {Poll::Ready(Err(IoError::ReadNotConnected))}
                 Some(stream) => {
                     match Pin::new(stream).borrow_mut().as_mut().poll_read(cx, buf) {
                         Poll::Ready(result) => {
                             match result {
                                 Ok(_) => {Poll::Ready(Ok(()))}
-                                Err(_) => {Poll::Ready(Err(FramedException::UnableToRead))}
+                                Err(_) => {Poll::Ready(Err(IoError::UnableToRead))}
                             }
                         },
                         Poll::Pending => {return Poll::Pending;}
@@ -83,15 +89,15 @@ mod std_tcp {
     }
 
     impl io::AsyncWrite for TcpStream<net::TcpStream> {
-        fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, FramedException>> {
+        fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, IoError>> {
             match self.stream.borrow_mut().as_mut() {
-                None => {Poll::Ready(Err(FramedException::UnableToWrite))}
+                None => {Poll::Ready(Err(IoError::WriteNotConnected))}
                 Some(stream) => {
                     match Pin::new(stream).borrow_mut().as_mut().poll_write(cx, buf) {
                         Poll::Ready(result) => {
                             match result {
                                 Ok(ok) => {Poll::Ready(Ok(ok))}
-                                Err(_) => {Poll::Ready(Err(FramedException::UnableToWrite))}
+                                Err(_) => {Poll::Ready(Err(IoError::UnableToWrite))}
                             }
                         }
                         Poll::Pending => {return Poll::Pending;}
@@ -100,15 +106,15 @@ mod std_tcp {
             }
         }
 
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
             match self.stream.borrow_mut().as_mut() {
-                None => {Poll::Ready(Err(FramedException::UnableToFlush))}
+                None => {Poll::Ready(Err(IoError::FlushNotConnected))}
                 Some(stream) => {
                     match Pin::new(stream).borrow_mut().as_mut().poll_flush(cx) {
                         Poll::Ready(result) => {
                             match result {
                                 Ok(ok) => {Poll::Ready(Ok(ok))}
-                                Err(_) => {Poll::Ready(Err(FramedException::UnableToFlush))}
+                                Err(_) => {Poll::Ready(Err(IoError::UnableToFlush))}
                             }
                         }
                         Poll::Pending => {return Poll::Pending;}
@@ -117,15 +123,15 @@ mod std_tcp {
             }
         }
 
-        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
             match self.stream.borrow_mut().as_mut() {
-                None => {Poll::Ready(Err(FramedException::UnableToClose))}
+                None => {Poll::Ready(Err(IoError::ShutdownNotConnected))}
                 Some(stream) => {
                     match Pin::new(stream).borrow_mut().as_mut().poll_shutdown(cx) {
                         Poll::Ready(result) => {
                             match result {
                                 Ok(ok) => {Poll::Ready(Ok(ok))}
-                                Err(_) => {Poll::Ready(Err(FramedException::UnableToClose))}
+                                Err(_) => {Poll::Ready(Err(IoError::UnableToClose))}
                             }
                         }
                         Poll::Pending => {return Poll::Pending;}

@@ -2,7 +2,9 @@ use alloc::boxed::Box;
 use core::ops::DerefMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use crate::core::framed::FramedException;
+
+use crate::core::framed::IoError;
+
 use super::io_slice::IoSlice;
 
 pub trait AsyncWrite {
@@ -10,13 +12,13 @@ pub trait AsyncWrite {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, FramedException>>;
+    ) -> Poll<Result<usize, IoError>>;
 
     fn poll_write_vectored(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         bufs: &[IoSlice<'_>],
-    ) -> Poll<Result<usize, FramedException>> {
+    ) -> Poll<Result<usize, IoError>> {
         let buf = bufs
             .iter()
             .find(|b| !b.is_empty())
@@ -24,9 +26,9 @@ pub trait AsyncWrite {
         self.poll_write(cx, buf)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>>;
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>>;
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>>;
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>>;
 
     fn is_write_vectored(&self) -> bool {
         false
@@ -39,7 +41,7 @@ macro_rules! deref_async_write {
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &[u8],
-        ) -> Poll<Result<usize, FramedException>> {
+        ) -> Poll<Result<usize, IoError>> {
             Pin::new(&mut **self).poll_write(cx, buf)
         }
 
@@ -47,7 +49,7 @@ macro_rules! deref_async_write {
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             bufs: &[IoSlice<'_>],
-        ) -> Poll<Result<usize, FramedException>> {
+        ) -> Poll<Result<usize, IoError>> {
             Pin::new(&mut **self).poll_write_vectored(cx, bufs)
         }
 
@@ -55,11 +57,11 @@ macro_rules! deref_async_write {
             (**self).is_write_vectored()
         }
 
-        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+        fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
             Pin::new(&mut **self).poll_flush(cx)
         }
 
-        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
             Pin::new(&mut **self).poll_shutdown(cx)
         }
     };
@@ -82,7 +84,7 @@ impl<P> AsyncWrite for Pin<P>
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, FramedException>> {
+    ) -> Poll<Result<usize, IoError>> {
         self.get_mut().as_mut().poll_write(cx, buf)
     }
 
@@ -90,15 +92,15 @@ impl<P> AsyncWrite for Pin<P>
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         bufs: &[IoSlice<'_>],
-    ) -> Poll<Result<usize, FramedException>> {
+    ) -> Poll<Result<usize, IoError>> {
         self.get_mut().as_mut().poll_write_vectored(cx, bufs)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         self.get_mut().as_mut().poll_flush(cx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), FramedException>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
         self.get_mut().as_mut().poll_shutdown(cx)
     }
 

@@ -2,14 +2,13 @@ use bytes::{BufMut, BytesMut};
 
 mod decoder;
 mod encoder;
-mod exceptions;
 
 pub use decoder::Decoder;
 pub use encoder::Encoder;
 
-use crate::core::framed::FramedException;
-// pub use framed;
+use crate::core::framed::IoError;
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Default)]
 pub struct Codec(());
 
 impl Codec {
@@ -19,7 +18,7 @@ impl Codec {
 }
 
 impl Encoder<&[u8]> for Codec {
-    type Error = FramedException;
+    type Error = IoError;
 
     fn encode(&mut self, data: &[u8], buf: &mut BytesMut) -> Result<(), Self::Error> {
         buf.reserve(data.len());
@@ -30,7 +29,7 @@ impl Encoder<&[u8]> for Codec {
 
 impl Decoder for Codec {
     type Item = BytesMut;
-    type Error = FramedException;
+    type Error = IoError;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if !buf.is_empty() {
