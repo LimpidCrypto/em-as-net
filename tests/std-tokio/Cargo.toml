@@ -26,7 +26,7 @@ required-features = [
     "em-as-net/tls",
     "embedded-tls/async",
     "embedded-tls/std",
-    "embedded-tls/tokio"
+    "embedded-tls/tokio",
 ]
 
 [[bin]]
@@ -35,8 +35,8 @@ path = "src/bin/ws.rs"
 required-features = []
 
 [[bin]]
-name = "ws_tls"
-path = "src/bin/ws_tls.rs"
+name = "wss"
+path = "src/bin/wss.rs"
 required-features = [
     "em-as-net/tls",
     "embedded-tls/async",

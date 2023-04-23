@@ -9,12 +9,14 @@ pub enum TcpError {
 #[cfg(feature = "std")]
 impl alloc::error::Error for TcpError {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 pub enum TlsError {
     #[error("Tls is not connected (`inner` is not defined)")]
     NotConnected,
     #[error("Failed to establish tls handshake.")]
     FailedToOpen,
+    #[error("{0:?}")]
+    Other(embedded_tls::TlsError)
 }
 
 #[cfg(feature = "std")]

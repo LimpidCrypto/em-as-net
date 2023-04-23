@@ -18,6 +18,8 @@ pub enum IoError {
     ShutdownNotConnected,
     #[error("Tried to read but the stream is not connected.")]
     ReadNotConnected,
+
+    // TlsConnection errors
     #[error("TLS: Tried to write but the stream is not connected.")]
     TlsWriteNotConnected,
     #[error("TLS: Tried to flush but the stream is not connected.")]
@@ -26,6 +28,8 @@ pub enum IoError {
     TlsShutdownNotConnected,
     #[error("TLS: Tried to read but the stream is not connected.")]
     TlsReadNotConnected,
+
+    // FromTokio errors
     #[error("FromTokio: Tried to write but the stream is not connected.")]
     AdapterTokioWriteNotConnected,
     #[error("FromTokio: Tried to flush but the stream is not connected.")]

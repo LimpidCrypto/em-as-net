@@ -12,7 +12,7 @@ use tokio::io::ReadBuf;
 
 use crate::core::framed::IoError;
 use crate::core::io;
-use crate::core::tcp::TlsError;
+use crate::core::tcp::{Connect, TcpError, TlsError};
 
 use crate::Err;
 
@@ -26,7 +26,7 @@ where
 
 impl<'a, S, C> TlsConnection<'a, S, C>
 where
-    S: Read + Write + 'a,
+    S: Read + Write + Connect<'a> + 'a,
     C: TlsCipherSuite + 'static,
 {
     pub fn new() -> Self {
@@ -42,8 +42,13 @@ where
         read_buffer: &'a mut [u8],
         write_buffer: &'a mut [u8],
     ) -> anyhow::Result<()> {
-        let tls: embedded_tls::TlsConnection<S, C> =
-            embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer);
+        let tls = match delegate.connect(server_name.clone()).await {
+            Ok(_) => {
+                embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer)
+            }
+            Err(_) => { return Err!(TcpError::UnableToConnect); }
+        };
+
 
         self.inner.replace(Some(tls));
         match self.inner.borrow_mut().as_mut() {
@@ -57,8 +62,8 @@ where
                     .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
                     .await
                 {
-                    Err(_) => {
-                        Err!(TlsError::FailedToOpen)
+                    Err(err) => {
+                        Err!(TlsError::Other(err))
                     }
                     Ok(_) => Ok(()),
                 }
@@ -69,7 +74,7 @@ where
 
 impl<'a, S, C> Default for TlsConnection<'a, S, C>
 where
-    S: Read + Write + 'a,
+    S: Read + Write + Connect<'a> + 'a,
     C: TlsCipherSuite + 'static,
 {
     fn default() -> Self {

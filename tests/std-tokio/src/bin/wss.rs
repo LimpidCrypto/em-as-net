@@ -1,6 +1,5 @@
 #![feature(type_alias_impl_trait)]
 
-use std::borrow::Cow;
 use embedded_tls::Aes128GcmSha256;
 
 // TODO: Replace with own integrations
@@ -10,13 +9,11 @@ use embedded_websocket::framer_async::{Framer, ReadResult};
 use tokio::net;
 use em_as_net::core::framed::{Codec, Framed};
 use em_as_net::core::tcp::{FromTokio, TcpStream};
-use em_as_net::core::tcp::Connect;
 use em_as_net::core::tcp::tls::TlsConnection;
 
 #[tokio::main]
 async fn main() {
     let stream: TcpStream<net::TcpStream> = TcpStream::new();
-    stream.connect(Cow::from("xrplcluster.com:443")).await.unwrap();
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let tls: TlsConnection<FromTokio<TcpStream<net::TcpStream>>, Aes128GcmSha256> = TlsConnection::new();
