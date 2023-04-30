@@ -8,8 +8,8 @@ use embedded_websocket::framer_async::{Framer, ReadResult};
 
 use tokio::net;
 use em_as_net::core::framed::{Codec, Framed};
-use em_as_net::core::tcp::{FromTokio, TcpStream};
-use em_as_net::core::tcp::tls::TlsConnection;
+use em_as_net::core::tcp::TcpStream;
+use em_as_net::core::tls::{TlsConnection, FromTokio};
 
 #[tokio::main]
 async fn main() {
@@ -17,7 +17,7 @@ async fn main() {
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
     let tls: TlsConnection<FromTokio<TcpStream<net::TcpStream>>, Aes128GcmSha256> = TlsConnection::new();
-    tls.open("xrplcluster.com:443".into(), FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer).await.unwrap();
+    tls.open("limpidcrypto.de:6005".into(), FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer).await.unwrap();
 
     let mut stream = Framed::new(tls, Codec::new());
 
@@ -26,8 +26,8 @@ async fn main() {
 
     let websocket_options = WebSocketOptions {
         path: "/",
-        host: "xrplcluster.com",
-        origin: "xrplcluster.com:443",
+        host: "limpidcrypto.de",
+        origin: "https://limpidcrypto.de:6005",
         sub_protocols: None,
         additional_headers: None,
     };
