@@ -28,6 +28,7 @@ bytes = { version = "1.4.0", default-features = false }
 embedded-io = { version = "0.4.0", features = ["async"] }
 pin-project-lite = "0.2.9"
 strum_macros = { version = "0.24.2", default-features = false }
+url = { version = "2.3.1", default-features = false }
 
 [dependencies.embedded-websocket]
 # git version needed to use `framer_async`
@@ -59,8 +60,13 @@ optional = true
 
 [features]
 default = ["std"]
+ipv4 = []
+ipv6 = []
 tls = []
-dns = []
+dns = [
+    "embassy-net/dns",
+    "ipv4"
+]
 ws = []
 json-rpc = []
 std = [
