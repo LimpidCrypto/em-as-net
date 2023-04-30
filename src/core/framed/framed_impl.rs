@@ -142,16 +142,16 @@ where
 
             if state.is_readable {
                 if state.eof {
-                    match pinned.codec.decode_eof(&mut state.buffer) {
+                    return match pinned.codec.decode_eof(&mut state.buffer) {
                         Err(err) => {
                             state.has_errored = true;
-                            return Poll::Ready(Some(Err!(err)));
+                            Poll::Ready(Some(Err!(err)))
                         }
                         Ok(frame) => {
                             if frame.is_none() {
                                 state.is_readable = false;
                             }
-                            return Poll::Ready(frame.map(Ok));
+                            Poll::Ready(frame.map(Ok))
                         }
                     }
                 }
@@ -251,11 +251,11 @@ where
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         if let Err(err) = ready!(self.as_mut().poll_flush(cx)) {
-            return Poll::Ready(Err!(err))
+            return Poll::Ready(Err!(err));
         }
 
         if let Err(err) = ready!(self.project().inner.poll_shutdown(cx)) {
-            return Poll::Ready(Err!(err))
+            return Poll::Ready(Err!(err));
         }
 
         Poll::Ready(Ok(()))
