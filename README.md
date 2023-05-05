@@ -2,6 +2,8 @@
 embedded, async networking, utilizing the [`embassy`](https://github.com/embassy-rs/embassy) crate for `no_std` networking.
 With `std` feature enabled we use [`tokio`](https://github.com/tokio-rs/tokio) crate for networking.
 
+This crate is work in progress, currently focusing on the `std` part.
+
 ## core
 ### dns
 Adapters for `no_std` DNS.

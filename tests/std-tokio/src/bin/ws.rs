@@ -2,25 +2,12 @@
 
 use std::borrow::Cow;
 
-// TODO: Replace with own integrations
-use embedded_websocket::{WebSocketClient, WebSocketCloseStatusCode, WebSocketOptions, WebSocketSendMessageType};
-use embedded_websocket::framer_async::{Framer, ReadResult};
-
-use tokio::net;
-use em_as_net::core::framed::{Codec, Framed};
-use em_as_net::core::tcp::TcpStream;
-use em_as_net::core::tcp::Connect;
+use em_as_net::client::websocket::{WebsocketClient, WebSocketOptions, ReadResult};
 
 #[tokio::main]
 async fn main() {
-    let stream: TcpStream<net::TcpStream> = TcpStream::new();
-    stream.connect(Cow::from("limpidcrypto.de:6004")).await.unwrap();
-
-    let mut stream = Framed::new(stream, Codec::new());
-
-    let rng = rand::thread_rng();
-    let ws = WebSocketClient::new_client(rng);
-
+    let mut buffer = [0u8; 4096];
+    let mut websocket = WebsocketClient::new(Cow::from("limpidcrypto.de:6004"), &mut buffer);
     let websocket_options = WebSocketOptions {
         path: "/",
         host: "limpidcrypto.de",
@@ -28,36 +15,21 @@ async fn main() {
         sub_protocols: None,
         additional_headers: None,
     };
+    websocket.connect(websocket_options).await;
 
-    let mut buffer = [0u8; 4096];
-    let mut framer = Framer::new(ws);
-    framer.connect(&mut stream, &mut buffer, &websocket_options).await.unwrap();
-
-    framer
+    websocket
         .write(
-            &mut stream,
-            &mut buffer,
-            WebSocketSendMessageType::Text,
-            true,
-            r#"{"method": "ping"}"#.as_bytes(),
+            r#"{"method": "ping"}"#.into(),
         )
-        .await.unwrap();
+        .await;
 
-    while let Some(read_result) = framer.read(&mut stream, &mut buffer).await {
-        let read_result = read_result.unwrap();
+    while let Some(Ok(read_result)) = websocket.read().await {
         match read_result {
             ReadResult::Text(text) => {
                 let expected = r#"{"result":{},"status":"success","type":"response"}"#;
                 assert_eq!(expected, text);
 
-                framer
-                    .close(
-                        &mut stream,
-                        &mut buffer,
-                        WebSocketCloseStatusCode::NormalClosure,
-                        None,
-                    )
-                    .await.unwrap()
+                websocket.close().await
             }
             _ => {
             }

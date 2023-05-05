@@ -5,6 +5,8 @@
 #![feature(ip_in_core)]
 #![allow(dead_code)] // Remove eventually
 
+#![feature(impl_trait_projections)]
+
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(feature = "std")]
