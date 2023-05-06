@@ -8,13 +8,6 @@ use em_as_net::client::websocket::{WebsocketClient, WebSocketOptions, ReadResult
 async fn main() {
     let mut buffer = [0u8; 4096];
     let mut websocket = WebsocketClient::new(Cow::from("ws://limpidcrypto.de:6004"), &mut buffer);
-    let websocket_options = WebSocketOptions {
-        path: "/",
-        host: "limpidcrypto.de",
-        origin: "ws://limpidcrypto.de:6004",
-        sub_protocols: None,
-        additional_headers: None,
-    };
     websocket.connect(None).await;
 
     websocket
