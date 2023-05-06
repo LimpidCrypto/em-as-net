@@ -94,25 +94,29 @@ mod if_std {
             message: Cow<'a, str>,
             send_msg_type: Option<WebSocketSendMessageType>,
         ) -> Result<()> {
-            return match self.framer
+            return match self
+                .framer
                 .borrow_mut()
                 .as_mut()
                 .unwrap()
                 .write(
                     // TODO: handle unwrap0
                     match self.stream.borrow_mut().as_mut() {
-                        None => { return Err!(WebsocketError::<anyhow::Error>::NotConnected); },
-                        Some(stream) => stream
+                        None => {
+                            return Err!(WebsocketError::<anyhow::Error>::NotConnected);
+                        }
+                        Some(stream) => stream,
                     },
                     self.buffer,
                     send_msg_type.unwrap_or(WebSocketSendMessageType::Text),
                     true,
                     message.as_ref().as_bytes(),
                 )
-                .await {
+                .await
+            {
                 Ok(()) => Ok(()),
-                Err(err) => Err!(WebsocketError::from(err))
-            }
+                Err(err) => Err!(WebsocketError::from(err)),
+            };
         }
 
         async fn close(&mut self) {

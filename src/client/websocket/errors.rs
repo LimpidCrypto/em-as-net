@@ -28,13 +28,13 @@ pub enum WebsocketError<E: Debug> {
 impl<E: Debug> From<FramerError<E>> for WebsocketError<E> {
     fn from(value: FramerError<E>) -> Self {
         match value {
-            FramerError::Io(e) => {WebsocketError::Io(e)}
-            FramerError::FrameTooLarge(e) => {WebsocketError::FrameTooLarge(e)}
-            FramerError::Utf8(e) => {WebsocketError::Utf8(e)}
-            FramerError::HttpHeader(_) => {WebsocketError::HttpHeader}
-            FramerError::WebSocket(e) => {WebsocketError::WebSocket(e)}
-            FramerError::Disconnected => {WebsocketError::Disconnected}
-            FramerError::RxBufferTooSmall(e) => {WebsocketError::RxBufferTooSmall(e)}
+            FramerError::Io(e) => WebsocketError::Io(e),
+            FramerError::FrameTooLarge(e) => WebsocketError::FrameTooLarge(e),
+            FramerError::Utf8(e) => WebsocketError::Utf8(e),
+            FramerError::HttpHeader(_) => WebsocketError::HttpHeader,
+            FramerError::WebSocket(e) => WebsocketError::WebSocket(e),
+            FramerError::Disconnected => WebsocketError::Disconnected,
+            FramerError::RxBufferTooSmall(e) => WebsocketError::RxBufferTooSmall(e),
         }
     }
 }
