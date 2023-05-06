@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use em_as_net::client::websocket::{WebsocketClient, WebSocketOptions, ReadResult, WebsocketClientIo};
+use em_as_net::client::websocket::{WebsocketClient, ReadResult, WebsocketClientIo};
 
 #[tokio::main]
 async fn main() {
