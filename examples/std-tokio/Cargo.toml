@@ -16,14 +16,16 @@ git = "https://github.com/ninjasource/embedded-websocket"
 version = "0.9.2"
 
 [[bin]]
-name = "adapter_from_tokio"
-path = "src/bin/adapter_from_tokio.rs"
+name = "tcp"
+path = "src/bin/tcp.rs"
 required-features = []
 
 [[bin]]
-name = "hello_world"
-path = "src/bin/hello_world.rs"
-required-features = []
+name = "adapter_from_tokio"
+path = "src/bin/adapter_from_tokio.rs"
+required-features = [
+    "em-as-net/tls",
+]
 
 [[bin]]
 name = "tls"
@@ -40,9 +42,7 @@ name = "ws"
 path = "src/bin/ws.rs"
 required-features = [
     "em-as-net/tls",
-    "embedded-tls/async",
-    "embedded-tls/std",
-    "embedded-tls/tokio"]
+]
 
 [[bin]]
 name = "wss"
