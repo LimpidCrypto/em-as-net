@@ -153,7 +153,7 @@ where
                             }
                             Poll::Ready(frame.map(Ok))
                         }
-                    }
+                    };
                 }
 
                 if let Some(frame) = match pinned.codec.decode(&mut state.buffer) {
