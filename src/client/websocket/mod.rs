@@ -6,7 +6,7 @@ use alloc::borrow::Cow;
 use anyhow::Result;
 use core::cell::RefCell;
 use embedded_websocket::framer_async::Framer;
-pub use embedded_websocket::{framer_async::ReadResult, WebSocketOptions};
+pub use embedded_websocket::{framer_async::ReadResult, WebSocketOptions, WebSocketState};
 use embedded_websocket::{Client, WebSocketSendMessageType};
 use rand_core::RngCore;
 
