@@ -21,11 +21,11 @@ pub struct WebsocketClient<'a, T, U: RngCore> {
 mod if_std {
     use crate::core::framed::{Codec, Framed};
     use crate::core::tcp::{Connect, TcpStream};
-    use alloc::borrow::{Cow, ToOwned};
+    use alloc::borrow::{Cow};
     use alloc::string::{String, ToString};
     use anyhow::Result;
     use core::cell::RefCell;
-    use core::net::SocketAddr;
+    
     use embedded_websocket::framer_async::{Framer, ReadResult};
     use embedded_websocket::{WebSocketCloseStatusCode, WebSocketSendMessageType};
     use tokio::net;
