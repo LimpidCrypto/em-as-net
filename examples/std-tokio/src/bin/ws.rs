@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use em_as_net::client::websocket::{WebsocketClient, WebSocketOptions, ReadResult};
+use em_as_net::client::websocket::{WebsocketClient, WebSocketOptions, ReadResult, WebsocketClientIo};
 
 #[tokio::main]
 async fn main() {
@@ -20,8 +20,9 @@ async fn main() {
     websocket
         .write(
             r#"{"method": "ping"}"#.into(),
+            None,
         )
-        .await;
+        .await.unwrap();
 
     while let Some(Ok(read_result)) = websocket.read().await {
         match read_result {

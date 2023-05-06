@@ -1,9 +1,9 @@
-use anyhow::Result;
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
-use core::net::SocketAddr;
 use crate::core::dns::queries::errors::DnsError;
 use crate::Err;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use anyhow::Result;
+use core::net::SocketAddr;
 
 pub mod queries;
 
@@ -18,7 +18,7 @@ pub async fn lookup(uri_str: Cow<str>) -> Result<SocketAddr> {
         Ok(addrs) => addrs.addrs,
         Err(err) => {
             return Err!(err);
-        },
+        }
     };
 
     Ok(SocketAddr::from(addrs))

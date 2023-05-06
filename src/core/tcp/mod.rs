@@ -5,7 +5,6 @@ pub mod errors;
 #[cfg(feature = "std")]
 pub use std_tcp::TcpStream;
 
-
 pub trait Connect<'a> {
     type Error: Debug + Display;
 

@@ -32,17 +32,17 @@ use errors::TlsError;
 use crate::Err;
 
 pub struct TlsConnection<'a, S, C>
-    where
-        S: Read + Write + 'a,
-        C: TlsCipherSuite + 'static,
+where
+    S: Read + Write + 'a,
+    C: TlsCipherSuite + 'static,
 {
     inner: RefCell<Option<embedded_tls::TlsConnection<'a, S, C>>>,
 }
 
 impl<'a, S, C> TlsConnection<'a, S, C>
-    where
-        S: Read + Write + Connect<'a> + 'a,
-        C: TlsCipherSuite + 'static,
+where
+    S: Read + Write + Connect<'a> + 'a,
+    C: TlsCipherSuite + 'static,
 {
     pub fn new() -> Self {
         Self {
@@ -57,12 +57,8 @@ impl<'a, S, C> TlsConnection<'a, S, C>
         read_buffer: &'a mut [u8],
         write_buffer: &'a mut [u8],
     ) -> anyhow::Result<()> {
-        let tls = match delegate.connect(server_name.clone()).await {
-            Ok(_) => embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer),
-            Err(err) => {
-                return Err!(err);
-            }
-        };
+        delegate.connect(server_name.clone()).await.unwrap();
+        let tls = embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer);
 
         self.inner.replace(Some(tls));
         match self.inner.borrow_mut().as_mut() {
@@ -71,7 +67,7 @@ impl<'a, S, C> TlsConnection<'a, S, C>
             }
             Some(tls) => {
                 let mut rng = OsRng;
-                let config = TlsConfig::new().with_server_name("limpidcrypto.de");
+                let config = TlsConfig::new().with_server_name("limpidcrypto.de"); // TODO: This is just for testing; TLS currently not working anyway
                 if let Err(err) = tls
                     .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
                     .await
@@ -86,9 +82,9 @@ impl<'a, S, C> TlsConnection<'a, S, C>
 }
 
 impl<'a, S, C> Default for TlsConnection<'a, S, C>
-    where
-        S: Read + Write + Connect<'a> + 'a,
-        C: TlsCipherSuite + 'static,
+where
+    S: Read + Write + Connect<'a> + 'a,
+    C: TlsCipherSuite + 'static,
 {
     fn default() -> Self {
         TlsConnection::new()
@@ -96,9 +92,9 @@ impl<'a, S, C> Default for TlsConnection<'a, S, C>
 }
 
 impl<'a, S, C> io::AsyncRead for TlsConnection<'a, S, C>
-    where
-        S: Read + Write + 'a,
-        C: TlsCipherSuite + 'static,
+where
+    S: Read + Write + 'a,
+    C: TlsCipherSuite + 'static,
 {
     type Error = IoError;
 
@@ -112,6 +108,10 @@ impl<'a, S, C> io::AsyncRead for TlsConnection<'a, S, C>
             Some(stream) => {
                 match Pin::new(&mut Box::pin(stream.read(buf.filled_mut()))).poll(cx) {
                     Poll::Ready(result) => match result {
+                        Ok(0) => {
+                            // no data ready
+                            Poll::Pending
+                        }
                         Ok(_) => Poll::Ready(Ok(())),
                         Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
                     },
@@ -123,9 +123,9 @@ impl<'a, S, C> io::AsyncRead for TlsConnection<'a, S, C>
 }
 
 impl<'a, S, C> io::AsyncWrite for TlsConnection<'a, S, C>
-    where
-        S: Read + Write + 'a,
-        C: TlsCipherSuite + 'static,
+where
+    S: Read + Write + 'a,
+    C: TlsCipherSuite + 'static,
 {
     fn poll_write(
         self: Pin<&mut Self>,
