@@ -22,17 +22,20 @@ mod if_std {
     use crate::core::framed::{Codec, Framed};
     use crate::core::tcp::{Connect, TcpStream};
     use alloc::borrow::{Cow, ToOwned};
+    use alloc::string::{String, ToString};
     use anyhow::Result;
     use core::cell::RefCell;
+    use core::net::SocketAddr;
     use embedded_websocket::framer_async::{Framer, ReadResult};
     use embedded_websocket::{WebSocketCloseStatusCode, WebSocketSendMessageType};
     use tokio::net;
 
-    use crate::client::websocket::errors::WebsocketError;
+    use crate::client::websocket::errors::{AddrsError, WebsocketError};
     use crate::client::websocket::{WebsocketClient, WebsocketClientIo};
     use crate::Err;
     use embedded_websocket::WebSocketOptions;
     use rand::rngs::ThreadRng;
+    use url::Url;
 
     impl<'a> WebsocketClient<'a, net::TcpStream, ThreadRng> {
         pub fn new(uri: Cow<'a, str>, buffer: &'a mut [u8]) -> Self {
@@ -44,16 +47,41 @@ mod if_std {
             }
         }
 
-        pub async fn connect(&mut self, options: WebSocketOptions<'a>) {
+        pub async fn connect(&mut self, options: Option<WebSocketOptions<'a>>) {
+            // parse uri
+            let url = Url::parse(&self.uri).map_err(AddrsError::InvalidFormat).unwrap();
+            let domain = url.domain().ok_or(AddrsError::ParseDomainError(&self.uri)).unwrap();
+            let port = match url.port() {
+                None => String::new(),
+                Some(port) => String::from_iter([":", port.to_string().as_str()])
+            };
+            let (uri_path, opt_path) = match url.path() {
+                "/" => ("", ("/")),
+                path => (path, path),
+            };
+            let query = url.query().unwrap_or("");
+
+            // get websocket options
+            let options = match options {
+                Some(options) => options,
+                None => WebSocketOptions {
+                    path: opt_path,
+                    host: domain,
+                    origin: &self.uri,
+                    sub_protocols: None,
+                    additional_headers: None,
+                },
+            };
+
             // Connect TCP
             let tcp_stream: TcpStream<net::TcpStream> = TcpStream::new();
-            tcp_stream.connect(self.uri.to_owned()).await.unwrap(); // TODO: handle error
+            tcp_stream.connect(Cow::from(String::from_iter([domain, port.as_str(), uri_path, query]))).await.unwrap(); // TODO: handle error
             let framed = Framed::new(tcp_stream, Codec::new());
             self.stream.replace(Some(framed));
 
+            // Connect Websocket
             let rng = rand::thread_rng();
             let ws_client = embedded_websocket::WebSocketClient::new_client(rng);
-            // Connect Websocket
             let mut framer = Framer::new(ws_client);
             framer
                 .connect(

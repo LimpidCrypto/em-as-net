@@ -48,6 +48,8 @@ pub enum AddrsError<'a> {
     InvalidFormat(#[from] url::ParseError),
     #[error("Scheme must be either 'ws' or 'wss'. (found: {0:?})")]
     InvalidScheme(&'a str),
+    #[error("Unable to parse domain (found: {0:?})")]
+    ParseDomainError(&'a str),
 }
 
 #[cfg(feature = "std")]
