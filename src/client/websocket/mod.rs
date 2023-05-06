@@ -49,11 +49,16 @@ mod if_std {
 
         pub async fn connect(&mut self, options: Option<WebSocketOptions<'a>>) {
             // parse uri
-            let url = Url::parse(&self.uri).map_err(AddrsError::InvalidFormat).unwrap();
-            let domain = url.domain().ok_or(AddrsError::ParseDomainError(&self.uri)).unwrap();
+            let url = Url::parse(&self.uri)
+                .map_err(AddrsError::InvalidFormat)
+                .unwrap();
+            let domain = url
+                .domain()
+                .ok_or(AddrsError::ParseDomainError(&self.uri))
+                .unwrap();
             let port = match url.port() {
                 None => String::new(),
-                Some(port) => String::from_iter([":", port.to_string().as_str()])
+                Some(port) => String::from_iter([":", port.to_string().as_str()]),
             };
             let (uri_path, opt_path) = match url.path() {
                 "/" => ("", ("/")),
@@ -75,7 +80,15 @@ mod if_std {
 
             // Connect TCP
             let tcp_stream: TcpStream<net::TcpStream> = TcpStream::new();
-            tcp_stream.connect(Cow::from(String::from_iter([domain, port.as_str(), uri_path, query]))).await.unwrap(); // TODO: handle error
+            tcp_stream
+                .connect(Cow::from(String::from_iter([
+                    domain,
+                    port.as_str(),
+                    uri_path,
+                    query,
+                ])))
+                .await
+                .unwrap(); // TODO: handle error
             let framed = Framed::new(tcp_stream, Codec::new());
             self.stream.replace(Some(framed));
 
