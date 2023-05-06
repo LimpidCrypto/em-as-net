@@ -11,28 +11,22 @@ pub struct A {
 #[cfg(feature = "std")]
 mod if_std {
     use super::*;
-    use alloc::boxed::Box;
     use tokio::net::lookup_host;
-    // use crate::core::dns::queries::query_lookup;
 
     impl<'a> A {
         pub async fn new(host: Cow<'a, str>) -> Result<Self, DnsError> {
-            let mut addresses = match lookup_host(&*host.clone()).await {
-                Err(err) => return Err(DnsError::LookupError(&*host.clone())),
+            let addresses = match lookup_host(&*host).await {
+                Err(_) => return Err(DnsError::LookupError(host.clone())),
                 Ok(socket_addrs_iter) => socket_addrs_iter,
             };
-            let ipv4_addrs = match addresses
+            return match addresses
                 .filter(|x| x.is_ipv4())
                 .collect::<Vec<SocketAddr>>()
                 .first()
             {
-                Some(addrs) => addrs,
-                None => return Err(DnsError::LookupIpv4Error("")),
-            };
-
-            return match ipv6_addrs {
-                SocketAddr::V4(addrs) => Ok(Self { addrs: *addrs }),
-                SocketAddr::V6(_) => Err(DnsError::LookupIpv4Error("")),
+                Some(SocketAddr::V4(addrs)) => Ok(Self { addrs: *addrs }),
+                None => Err(DnsError::LookupIpv4Error(host.clone())),
+                _ => Err(DnsError::LookupIpv4Error(host.clone())),
             };
         }
     }

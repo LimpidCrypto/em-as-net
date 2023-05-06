@@ -11,29 +11,22 @@ pub struct Aaaa {
 #[cfg(feature = "std")]
 mod if_std {
     use super::*;
-    use alloc::boxed::Box;
-    use core::net::{IpAddr, Ipv6Addr};
     use tokio::net::lookup_host;
-    // use crate::core::dns::queries::query_lookup;
 
     impl<'a> Aaaa {
         pub async fn new(host: Cow<'a, str>) -> Result<Self, DnsError> {
-            let mut addresses = match lookup_host(&*host.clone()).await {
-                Err(err) => return Err(DnsError::LookupError(&*host.clone())),
+            let addresses = match lookup_host(&*host).await {
+                Err(_) => return Err(DnsError::LookupError(host.clone())),
                 Ok(socket_addrs_iter) => socket_addrs_iter,
             };
-            let ipv6_addrs = match addresses
+            return match addresses
                 .filter(|x| x.is_ipv6())
                 .collect::<Vec<SocketAddr>>()
                 .first()
             {
-                Some(addrs) => addrs,
-                None => return Err(DnsError::LookupIpv4Error("")),
-            };
-
-            return match ipv6_addrs {
-                SocketAddr::V4(_) => Err(DnsError::LookupIpv6Error("")),
-                SocketAddr::V6(addrs) => Ok(Self { addrs: *addrs }),
+                Some(SocketAddr::V6(addrs)) => Ok(Self { addrs: *addrs }),
+                None => Err(DnsError::LookupIpv6Error(host.clone())),
+                _ => Err(DnsError::LookupIpv4Error(host.clone())),
             };
         }
     }

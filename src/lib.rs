@@ -20,7 +20,7 @@ pub mod utils;
 
 mod _anyhow;
 
-#[cfg(all(feature = "ipv4", feature = "ipv6"))]
-compile_error!(
-    "The `ipv4` and `ipv6` features are mutually exclusive and cannot be enabled at the same time"
-);
+// #[cfg(all(feature = "ipv4", feature = "ipv6"))]
+// compile_error!(
+//     "The `ipv4` and `ipv6` features are mutually exclusive and cannot be enabled at the same time"
+// );
