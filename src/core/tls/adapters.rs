@@ -60,15 +60,13 @@ impl<T: io::AsyncRead + Unpin> Read for FromTokio<T> {
             let mut buf = tokio::io::ReadBuf::new(buf);
             match Pin::new(&mut self.inner).poll_read(cx, &mut buf) {
                 Poll::Ready(r) => match r {
-                    Ok(()) => {
-                        Poll::Ready(Ok(buf.filled().len()))
-                    }
+                    Ok(_) => Poll::Ready(Ok(buf.filled().len())),
                     Err(_) => Poll::Ready(Err(IoError::AdapterTokioReadNotConnected)),
                 },
                 Poll::Pending => Poll::Pending,
             }
         })
-            .await
+        .await
     }
 }
 
@@ -81,7 +79,7 @@ impl<T: io::AsyncWrite + Unpin> Write for FromTokio<T> {
             },
             Poll::Pending => Poll::Pending,
         })
-            .await
+        .await
     }
 
     async fn flush(&mut self) -> Result<(), Self::Error> {
@@ -92,7 +90,20 @@ impl<T: io::AsyncWrite + Unpin> Write for FromTokio<T> {
             },
             Poll::Pending => Poll::Pending,
         })
-            .await
+        .await
+    }
+}
+
+impl<T: io::AsyncWrite + Unpin> FromTokio<T> {
+    pub async fn shutdown(&mut self) -> Result<(), IoError> {
+        poll_fn::poll_fn(|cx| match Pin::new(&mut self.inner).poll_shutdown(cx) {
+            Poll::Ready(r) => match r {
+                Ok(_) => Poll::Ready(Ok(())),
+                Err(_) => Poll::Ready(Err(IoError::AdapterTokioShutdownNotConnected)),
+            },
+            Poll::Pending => Poll::Pending,
+        })
+        .await
     }
 }
 
@@ -108,15 +119,15 @@ mod poll_fn {
     impl<F> Unpin for PollFn<F> {}
 
     pub fn poll_fn<T, F>(f: F) -> impl Future<Output = T>
-        where
-            F: FnMut(&mut Context<'_>) -> Poll<T>,
+    where
+        F: FnMut(&mut Context<'_>) -> Poll<T>,
     {
         PollFn { f }
     }
 
     impl<T, F> Future for PollFn<F>
-        where
-            F: FnMut(&mut Context<'_>) -> Poll<T>,
+    where
+        F: FnMut(&mut Context<'_>) -> Poll<T>,
     {
         type Output = T;
 
