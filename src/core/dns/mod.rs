@@ -1,10 +1,10 @@
-use self::queries::DnsError;
+mod queries;
+
+pub use queries::DnsError;
 use crate::Err;
 use alloc::borrow::Cow;
 use anyhow::Result;
 use core::net::SocketAddr;
-
-pub mod queries;
 
 #[cfg(all(feature = "ipv4", not(feature = "ipv6")))]
 pub async fn lookup(uri_str: Cow<'_, str>) -> Result<SocketAddr> {
