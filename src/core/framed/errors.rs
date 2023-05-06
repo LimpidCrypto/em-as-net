@@ -36,7 +36,7 @@ pub enum IoError {
     AdapterTokioFlushNotConnected,
     #[error("FromTokio: Tried to shutdown but the stream is not connected.")]
     AdapterTokioShutdownNotConnected,
-    #[error("v: Tried to read but the stream is not connected.")]
+    #[error("FromTokio: Tried to read but the stream is not connected.")]
     AdapterTokioReadNotConnected,
 
     // AsyncRead errors
