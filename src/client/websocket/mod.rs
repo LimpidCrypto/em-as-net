@@ -6,9 +6,15 @@ use alloc::borrow::Cow;
 use anyhow::Result;
 use core::cell::RefCell;
 use embedded_websocket::framer_async::Framer;
-pub use embedded_websocket::{framer_async::ReadResult, WebSocketOptions as WebsocketOptions, WebSocketState as WebsocketState};
-use embedded_websocket::{Client, WebSocketSendMessageType};
+use embedded_websocket::Client;
 use rand_core::RngCore;
+// exports
+pub use embedded_websocket::{
+    framer_async::ReadResult,
+    WebSocketOptions as WebsocketOptions,
+    WebSocketState as WebsocketState,
+    WebSocketSendMessageType as WebsocketSendMessageType
+};
 
 pub struct WebsocketClient<'a, T, U: RngCore> {
     uri: Cow<'a, str>,
@@ -188,7 +194,7 @@ pub trait WebsocketClientIo<'a> {
     async fn write(
         &mut self,
         message: Cow<'a, str>,
-        send_msg_type: Option<WebSocketSendMessageType>,
+        send_msg_type: Option<WebsocketSendMessageType>,
     ) -> Result<()>;
     async fn close(&mut self);
 }
