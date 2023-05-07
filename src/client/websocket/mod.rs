@@ -6,7 +6,7 @@ use alloc::borrow::Cow;
 use anyhow::Result;
 use core::cell::RefCell;
 use embedded_websocket::framer_async::Framer;
-pub use embedded_websocket::{framer_async::ReadResult, WebSocketOptions, WebSocketState};
+pub use embedded_websocket::{framer_async::ReadResult, WebSocketOptions as WebsocketOptions, WebSocketState as WebsocketState};
 use embedded_websocket::{Client, WebSocketSendMessageType};
 use rand_core::RngCore;
 
@@ -33,7 +33,7 @@ mod if_std {
     use crate::client::websocket::errors::{AddrsError, WebsocketError};
     use crate::client::websocket::{WebsocketClient, WebsocketClientIo};
     use crate::Err;
-    use embedded_websocket::WebSocketOptions;
+    use embedded_websocket::WebSocketOptions as WebsocketOptions;
     use rand::rngs::ThreadRng;
     use url::Url;
 
@@ -47,7 +47,7 @@ mod if_std {
             }
         }
 
-        pub async fn connect(&mut self, options: Option<WebSocketOptions<'a>>) {
+        pub async fn connect(&mut self, options: Option<WebsocketOptions<'a>>) {
             // parse uri
             let url = Url::parse(&self.uri)
                 .map_err(AddrsError::InvalidFormat)
@@ -69,7 +69,7 @@ mod if_std {
             // get websocket options
             let options = match options {
                 Some(options) => options,
-                None => WebSocketOptions {
+                None => WebsocketOptions {
                     path: opt_path,
                     host: domain,
                     origin: &self.uri,
@@ -106,6 +106,11 @@ mod if_std {
                 .unwrap();
 
             self.framer.replace(Some(framer));
+        }
+
+        pub fn is_open(&self) -> bool {
+            self.framer.borrow().is_some()
+            && self.stream.borrow().is_some()
         }
     }
 
