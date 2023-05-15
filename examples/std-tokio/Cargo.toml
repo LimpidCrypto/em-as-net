@@ -41,7 +41,6 @@ required-features = [
 name = "ws"
 path = "src/bin/ws.rs"
 required-features = [
-    "em-as-net/tls",
 ]
 
 [[bin]]

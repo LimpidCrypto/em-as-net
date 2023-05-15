@@ -53,15 +53,16 @@ mod if_std {
             }
         }
 
-        pub async fn connect(&mut self, options: Option<WebsocketOptions<'a>>) {
+        pub async fn connect(&mut self, options: Option<WebsocketOptions<'a>>) -> Result<()> {
             // parse uri
-            let url = Url::parse(&self.uri)
-                .map_err(AddrsError::InvalidFormat)
-                .unwrap();
-            let domain = url
-                .domain()
-                .ok_or(AddrsError::ParseDomainError(&self.uri))
-                .unwrap();
+            let url = match Url::parse(&self.uri) {
+                Err(_) => { return Err!(AddrsError::ParseUrlError(&self.uri)) }
+                Ok(url) => url
+            };
+            let domain = match url.domain() {
+                None => { return Err!(AddrsError::ParseDomainError(&self.uri)) }
+                Some(domain) => domain
+            };
             let port = match url.port() {
                 None => String::new(),
                 Some(port) => String::from_iter([":", port.to_string().as_str()]),
@@ -86,15 +87,14 @@ mod if_std {
 
             // Connect TCP
             let tcp_stream: TcpStream<net::TcpStream> = TcpStream::new();
-            tcp_stream
-                .connect(Cow::from(String::from_iter([
-                    domain,
-                    port.as_str(),
-                    uri_path,
-                    query,
-                ])))
-                .await
-                .unwrap(); // TODO: handle error
+            if let Err(conn_err) = tcp_stream.connect(Cow::from(String::from_iter([
+                domain,
+                port.as_str(),
+                uri_path,
+                query,
+            ]))).await {
+                return Err!(conn_err);
+            }
             let framed = Framed::new(tcp_stream, Codec::new());
             self.stream.replace(Some(framed));
 
@@ -102,16 +102,22 @@ mod if_std {
             let rng = rand::thread_rng();
             let ws_client = embedded_websocket::WebSocketClient::new_client(rng);
             let mut framer = Framer::new(ws_client);
-            framer
+            if let Err(framer_err) = framer
                 .connect(
-                    &mut self.stream.borrow_mut().as_mut().unwrap(),
+                    &mut match self.stream.borrow_mut().as_mut() {
+                        None => return Err!(WebsocketError::<anyhow::Error>::NotConnected),
+                        Some(stream) => stream,
+                    },
                     self.buffer,
                     &options,
                 )
-                .await
-                .unwrap();
+                .await {
+                return Err!(WebsocketError::from(framer_err))
+            }
 
             self.framer.replace(Some(framer));
+
+            Ok(())
         }
 
         pub fn is_open(&self) -> bool {
@@ -122,23 +128,25 @@ mod if_std {
 
     impl<'a> WebsocketClientIo<'a> for WebsocketClient<'a, net::TcpStream, ThreadRng> {
         async fn read(&mut self) -> Option<Result<ReadResult<'_>>> {
-            let read_result = self
-                .framer
-                .borrow_mut()
-                .as_mut()
-                .unwrap()
-                .read(
-                    // TODO: handle unwrap
-                    self.stream.borrow_mut().as_mut().unwrap(),
-                    self.buffer,
-                )
-                .await;
+            if let Some(framer) = self.framer.borrow_mut().as_mut() {
+                let read_result = framer
+                    .read(
+                        &mut match self.stream.borrow_mut().as_mut() {
+                            None => return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected)),
+                            Some(stream) => stream
+                        },
+                        self.buffer,
+                    )
+                    .await;
 
-            match read_result {
-                Some(Err(err)) => Some(Err!(WebsocketError::<anyhow::Error>::from(err))),
-                Some(Ok(read_res)) => Some(Ok(read_res)),
-                None => None,
+                return match read_result {
+                    Some(Err(err)) => Some(Err!(WebsocketError::<anyhow::Error>::from(err))),
+                    Some(Ok(read_res)) => Some(Ok(read_res)),
+                    None => None,
+                }
             }
+
+            return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected))
         }
 
         async fn write(
@@ -146,45 +154,49 @@ mod if_std {
             message: Cow<'a, str>,
             send_msg_type: Option<WebSocketSendMessageType>,
         ) -> Result<()> {
-            return match self
-                .framer
-                .borrow_mut()
-                .as_mut()
-                .unwrap()
-                .write(
-                    // TODO: handle unwrap0
-                    match self.stream.borrow_mut().as_mut() {
-                        None => {
-                            return Err!(WebsocketError::<anyhow::Error>::NotConnected);
-                        }
-                        Some(stream) => stream,
-                    },
-                    self.buffer,
-                    send_msg_type.unwrap_or(WebSocketSendMessageType::Text),
-                    true,
-                    message.as_ref().as_bytes(),
-                )
-                .await
-            {
-                Ok(()) => Ok(()),
-                Err(err) => Err!(WebsocketError::from(err)),
-            };
+            if let Some(framer) = self.framer.borrow_mut().as_mut() {
+                return match framer
+                    .write(
+                        match self.stream.borrow_mut().as_mut() {
+                            None => {
+                                return Err!(WebsocketError::<anyhow::Error>::NotConnected);
+                            }
+                            Some(stream) => stream,
+                        },
+                        self.buffer,
+                        send_msg_type.unwrap_or(WebSocketSendMessageType::Text),
+                        true,
+                        message.as_ref().as_bytes(),
+                    )
+                    .await
+                {
+                    Ok(()) => Ok(()),
+                    Err(err) => Err!(WebsocketError::from(err)),
+                };
+            }
+
+            return Err!(WebsocketError::<anyhow::Error>::NotConnected)
         }
 
-        async fn close(&mut self) {
-            self.framer
-                .borrow_mut()
-                .as_mut()
-                .unwrap()
-                .close(
-                    // TODO: handle unwrap
-                    self.stream.borrow_mut().as_mut().unwrap(),
-                    self.buffer,
-                    WebSocketCloseStatusCode::NormalClosure,
-                    None,
-                )
-                .await
-                .unwrap() // TODO: Return `Result`
+        async fn close(&mut self) -> Result<()> {
+            if let Some(framer) = self.framer.borrow_mut().as_mut() {
+                return match framer
+                    .close(
+                        &mut match self.stream.borrow_mut().as_mut() {
+                            None => return Err!(WebsocketError::<anyhow::Error>::NotConnected),
+                            Some(stream) => stream,
+                        },
+                        self.buffer,
+                        WebSocketCloseStatusCode::NormalClosure,
+                        None,
+                    )
+                    .await {
+                    Err(framer_err) => return Err!(WebsocketError::from(framer_err)),
+                    Ok(()) => Ok(())
+                }
+            }
+
+            return Err!(WebsocketError::<anyhow::Error>::NotConnected)
         }
     }
 }
@@ -196,5 +208,5 @@ pub trait WebsocketClientIo<'a> {
         message: Cow<'a, str>,
         send_msg_type: Option<WebsocketSendMessageType>,
     ) -> Result<()>;
-    async fn close(&mut self);
+    async fn close(&mut self) -> Result<()>;
 }

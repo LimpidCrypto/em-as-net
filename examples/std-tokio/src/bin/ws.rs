@@ -1,5 +1,3 @@
-#![feature(type_alias_impl_trait)]
-
 use std::borrow::Cow;
 
 use em_as_net::client::websocket::{WebsocketClient, ReadResult, WebsocketClientIo};
@@ -8,7 +6,7 @@ use em_as_net::client::websocket::{WebsocketClient, ReadResult, WebsocketClientI
 async fn main() {
     let mut buffer = [0u8; 4096];
     let mut websocket = WebsocketClient::new(Cow::from("ws://limpidcrypto.de:6004"), &mut buffer);
-    websocket.connect(None).await;
+    websocket.connect(None).await.unwrap();
 
     websocket
         .write(
@@ -23,7 +21,7 @@ async fn main() {
                 let expected = r#"{"result":{},"status":"success","type":"response"}"#;
                 assert_eq!(expected, text);
 
-                websocket.close().await
+                websocket.close().await.unwrap()
             }
             _ => {
             }

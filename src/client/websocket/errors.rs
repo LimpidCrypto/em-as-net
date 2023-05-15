@@ -50,6 +50,8 @@ pub enum AddrsError<'a> {
     InvalidScheme(&'a str),
     #[error("Unable to parse domain (found: {0:?})")]
     ParseDomainError(&'a str),
+    #[error("Unable to parse url (found: {0:?})")]
+    ParseUrlError(&'a str),
 }
 
 #[cfg(feature = "std")]

@@ -57,7 +57,7 @@ where
         read_buffer: &'a mut [u8],
         write_buffer: &'a mut [u8],
     ) -> anyhow::Result<()> {
-        delegate.connect(server_name.clone()).await.unwrap();
+        delegate.connect(server_name.clone()).await.unwrap(); // TODO: unhandled unwrap
         let tls = embedded_tls::TlsConnection::new(delegate, read_buffer, write_buffer);
 
         self.inner.replace(Some(tls));
