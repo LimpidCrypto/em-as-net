@@ -10,10 +10,8 @@ use embedded_websocket::Client;
 use rand_core::RngCore;
 // exports
 pub use embedded_websocket::{
-    framer_async::ReadResult,
-    WebSocketOptions as WebsocketOptions,
-    WebSocketState as WebsocketState,
-    WebSocketSendMessageType as WebsocketSendMessageType
+    framer_async::ReadResult, WebSocketOptions as WebsocketOptions,
+    WebSocketSendMessageType as WebsocketSendMessageType, WebSocketState as WebsocketState,
 };
 
 pub struct WebsocketClient<'a, T, U: RngCore> {
@@ -26,7 +24,7 @@ pub struct WebsocketClient<'a, T, U: RngCore> {
 #[cfg(feature = "std")]
 mod if_std {
     use crate::core::framed::{Codec, Framed};
-    use crate::core::tcp::{TcpConnect, TcpSocket, adapters::TcpTokio};
+    use crate::core::tcp::{adapters::TcpTokio, TcpConnect, TcpSocket};
     use alloc::borrow::Cow;
     use alloc::string::{String, ToString};
     use anyhow::Result;
@@ -55,12 +53,12 @@ mod if_std {
         pub async fn connect(&mut self, options: Option<WebsocketOptions<'a>>) -> Result<()> {
             // parse uri
             let url = match Url::parse(&self.uri) {
-                Err(_) => { return Err!(AddrsError::ParseUrlError(&self.uri)) }
-                Ok(url) => url
+                Err(_) => return Err!(AddrsError::ParseUrlError(&self.uri)),
+                Ok(url) => url,
             };
             let domain = match url.domain() {
-                None => { return Err!(AddrsError::ParseDomainError(&self.uri)) }
-                Some(domain) => domain
+                None => return Err!(AddrsError::ParseDomainError(&self.uri)),
+                Some(domain) => domain,
             };
             let port = match url.port() {
                 None => String::new(),
@@ -90,7 +88,9 @@ mod if_std {
                 port.as_str(),
                 uri_path,
                 query,
-            ]))).await {
+            ])))
+            .await
+            {
                 Err(conn_err) => return Err!(conn_err),
                 Ok(socket) => socket,
             };
@@ -110,8 +110,9 @@ mod if_std {
                     self.buffer,
                     &options,
                 )
-                .await {
-                return Err!(WebsocketError::from(framer_err))
+                .await
+            {
+                return Err!(WebsocketError::from(framer_err));
             }
 
             self.framer.replace(Some(framer));
@@ -120,8 +121,7 @@ mod if_std {
         }
 
         pub fn is_open(&self) -> bool {
-            self.framer.borrow().is_some()
-            && self.stream.borrow().is_some()
+            self.framer.borrow().is_some() && self.stream.borrow().is_some()
         }
     }
 
@@ -131,8 +131,10 @@ mod if_std {
                 let read_result = framer
                     .read(
                         &mut match self.stream.borrow_mut().as_mut() {
-                            None => return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected)),
-                            Some(stream) => stream
+                            None => {
+                                return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected))
+                            }
+                            Some(stream) => stream,
                         },
                         self.buffer,
                     )
@@ -142,10 +144,10 @@ mod if_std {
                     Some(Err(err)) => Some(Err!(WebsocketError::<anyhow::Error>::from(err))),
                     Some(Ok(read_res)) => Some(Ok(read_res)),
                     None => None,
-                }
+                };
             }
 
-            return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected))
+            return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected));
         }
 
         async fn write(
@@ -174,7 +176,7 @@ mod if_std {
                 };
             }
 
-            return Err!(WebsocketError::<anyhow::Error>::NotConnected)
+            return Err!(WebsocketError::<anyhow::Error>::NotConnected);
         }
 
         async fn close(&mut self) -> Result<()> {
@@ -189,13 +191,14 @@ mod if_std {
                         WebSocketCloseStatusCode::NormalClosure,
                         None,
                     )
-                    .await {
+                    .await
+                {
                     Err(framer_err) => return Err!(WebsocketError::from(framer_err)),
-                    Ok(()) => Ok(())
-                }
+                    Ok(()) => Ok(()),
+                };
             }
 
-            return Err!(WebsocketError::<anyhow::Error>::NotConnected)
+            return Err!(WebsocketError::<anyhow::Error>::NotConnected);
         }
     }
 }

@@ -49,7 +49,7 @@ impl<'a, T: TcpConnect<'a>> TcpConnect<'a> for FromTokio<T> {
     async fn connect(ip: Cow<'a, str>) -> Result<Self> {
         match T::connect(ip).await {
             Err(conn_err) => Err(conn_err),
-            Ok(stream) => Ok( Self { inner: stream } )
+            Ok(stream) => Ok(Self { inner: stream }),
         }
     }
 }

@@ -7,11 +7,7 @@ use core::task::{Context, Poll};
 use super::io_slice::IoSlice;
 
 pub trait AsyncWrite {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>>;
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>>;
 
     fn poll_write_vectored(
         self: Pin<&mut Self>,
@@ -60,10 +56,7 @@ macro_rules! deref_async_write {
             Pin::new(&mut **self).poll_flush(cx)
         }
 
-        fn poll_shutdown(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Result<()>> {
+        fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
             Pin::new(&mut **self).poll_shutdown(cx)
         }
     };
@@ -82,11 +75,7 @@ where
     P: DerefMut + Unpin,
     P::Target: AsyncWrite,
 {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<Result<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
         self.get_mut().as_mut().poll_write(cx, buf)
     }
 

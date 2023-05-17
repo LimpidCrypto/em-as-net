@@ -1,10 +1,12 @@
 use alloc::borrow::Cow;
 use anyhow::Result;
-use embassy_net_driver::Driver;
+
 
 pub trait AdaptConnect<'a> {
     /// Defines and connects the `inner` of an adapter to the host
-    async fn connect(ip: Cow<'a, str>) -> Result<Self> where Self: Sized;
+    async fn connect(ip: Cow<'a, str>) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 #[cfg(feature = "std")]
@@ -12,20 +14,20 @@ pub use std_adapters::TcpTokio;
 
 #[cfg(feature = "std")]
 mod std_adapters {
-    use alloc::borrow::Cow;
-    use core::cell::RefCell;
-    use core::pin::Pin;
-    use core::task::{Context, Poll};
-    use core::borrow::BorrowMut;
-    use anyhow::Result;
-    use tokio::io::ReadBuf;
-    use tokio::net::TcpStream;
-    use tokio::io::{AsyncRead, AsyncWrite};
     use crate::core::framed::IoError;
     use crate::core::io;
     use crate::core::tcp::adapters::AdaptConnect;
     use crate::core::tcp::errors::TcpError;
     use crate::Err;
+    use alloc::borrow::Cow;
+    use anyhow::Result;
+    use core::borrow::BorrowMut;
+    use core::cell::RefCell;
+    use core::pin::Pin;
+    use core::task::{Context, Poll};
+    use tokio::io::ReadBuf;
+    use tokio::io::{AsyncRead, AsyncWrite};
+    use tokio::net::TcpStream;
 
     #[derive(Debug)]
     pub struct TcpTokio {
@@ -36,7 +38,9 @@ mod std_adapters {
         async fn connect(ip: Cow<'a, str>) -> Result<Self> {
             match TcpStream::connect(&*ip).await {
                 Err(_) => Err!(TcpError::UnableToConnect),
-                Ok(stream) => Ok( Self { inner: RefCell::new(Some(stream)) } ),
+                Ok(stream) => Ok(Self {
+                    inner: RefCell::new(Some(stream)),
+                }),
             }
         }
     }
