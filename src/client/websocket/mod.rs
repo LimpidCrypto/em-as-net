@@ -1,7 +1,7 @@
 pub mod errors;
 
 use crate::core::framed::{Codec, Framed};
-use crate::core::tcp::TcpStream;
+use crate::core::tcp::TcpSocket;
 use alloc::borrow::Cow;
 use anyhow::Result;
 use core::cell::RefCell;
@@ -19,14 +19,14 @@ pub use embedded_websocket::{
 pub struct WebsocketClient<'a, T, U: RngCore> {
     uri: Cow<'a, str>,
     buffer: &'a mut [u8],
-    stream: RefCell<Option<Framed<TcpStream<T>, Codec>>>,
+    stream: RefCell<Option<Framed<TcpSocket<T>, Codec>>>,
     framer: RefCell<Option<Framer<U, Client>>>,
 }
 
 #[cfg(feature = "std")]
 mod if_std {
     use crate::core::framed::{Codec, Framed};
-    use crate::core::tcp::{Connect, TcpStream};
+    use crate::core::tcp::{TcpConnect, TcpSocket, adapters::TcpTokio};
     use alloc::borrow::Cow;
     use alloc::string::{String, ToString};
     use anyhow::Result;
@@ -34,7 +34,6 @@ mod if_std {
 
     use embedded_websocket::framer_async::{Framer, ReadResult};
     use embedded_websocket::{WebSocketCloseStatusCode, WebSocketSendMessageType};
-    use tokio::net;
 
     use crate::client::websocket::errors::{AddrsError, WebsocketError};
     use crate::client::websocket::{WebsocketClient, WebsocketClientIo};
@@ -43,7 +42,7 @@ mod if_std {
     use rand::rngs::ThreadRng;
     use url::Url;
 
-    impl<'a> WebsocketClient<'a, net::TcpStream, ThreadRng> {
+    impl<'a> WebsocketClient<'a, TcpTokio, ThreadRng> {
         pub fn new(uri: Cow<'a, str>, buffer: &'a mut [u8]) -> Self {
             Self {
                 uri,
@@ -86,16 +85,16 @@ mod if_std {
             };
 
             // Connect TCP
-            let tcp_stream: TcpStream<net::TcpStream> = TcpStream::new();
-            if let Err(conn_err) = tcp_stream.connect(Cow::from(String::from_iter([
+            let tcp_socket = match TcpSocket::<TcpTokio>::connect(Cow::from(String::from_iter([
                 domain,
                 port.as_str(),
                 uri_path,
                 query,
             ]))).await {
-                return Err!(conn_err);
-            }
-            let framed = Framed::new(tcp_stream, Codec::new());
+                Err(conn_err) => return Err!(conn_err),
+                Ok(socket) => socket,
+            };
+            let framed = Framed::new(tcp_socket, Codec::new());
             self.stream.replace(Some(framed));
 
             // Connect Websocket
@@ -126,7 +125,7 @@ mod if_std {
         }
     }
 
-    impl<'a> WebsocketClientIo<'a> for WebsocketClient<'a, net::TcpStream, ThreadRng> {
+    impl<'a> WebsocketClientIo<'a> for WebsocketClient<'a, TcpTokio, ThreadRng> {
         async fn read(&mut self) -> Option<Result<ReadResult<'_>>> {
             if let Some(framer) = self.framer.borrow_mut().as_mut() {
                 let read_result = framer

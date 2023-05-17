@@ -1,10 +1,12 @@
 #![no_std]
+// #![cfg(not(feature = "std"), no_std)]
 #![allow(incomplete_features)]
 #![feature(type_alias_impl_trait)]
 #![feature(async_fn_in_trait)]
 #![feature(ip_in_core)]
 #![allow(dead_code)] // Remove eventually
 #![feature(impl_trait_projections)]
+#![feature(associated_type_defaults)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

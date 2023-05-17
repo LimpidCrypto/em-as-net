@@ -167,3 +167,13 @@ where
             .finish()
     }
 }
+
+impl<'a, T> From<T> for Framed<T, Codec>
+where
+    T: AsyncRead + AsyncWrite,
+{
+    /// Uses [`Codec`] as default
+    fn from(value: T) -> Self {
+        Self::new(value, Codec::new())
+    }
+}

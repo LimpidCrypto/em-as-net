@@ -299,7 +299,7 @@ pub fn poll_write_buf<T: AsyncWrite, B: Buf>(
     io: Pin<&mut T>,
     cx: &mut Context<'_>,
     buf: &mut B,
-) -> Poll<Result<usize, IoError>> {
+) -> Poll<Result<usize>> {
     const MAX_BUFS: usize = 64;
 
     if !buf.has_remaining() {

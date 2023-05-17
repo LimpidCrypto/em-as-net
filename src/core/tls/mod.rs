@@ -26,7 +26,7 @@ use tokio::io::ReadBuf;
 
 use crate::core::framed::IoError;
 use crate::core::io;
-use crate::core::tcp::Connect;
+use crate::core::tcp::TcpConnect;
 use errors::TlsError;
 
 use crate::Err;
@@ -41,7 +41,7 @@ where
 
 impl<'a, S, C> TlsConnection<'a, S, C>
 where
-    S: Read + Write + Connect<'a> + 'a,
+    S: Read + Write + TcpConnect<'a> + 'a,
     C: TlsCipherSuite + 'static,
 {
     pub fn new() -> Self {
@@ -83,7 +83,7 @@ where
 
 impl<'a, S, C> Default for TlsConnection<'a, S, C>
 where
-    S: Read + Write + Connect<'a> + 'a,
+    S: Read + Write + TcpConnect<'a> + 'a,
     C: TlsCipherSuite + 'static,
 {
     fn default() -> Self {

@@ -1,15 +1,17 @@
 use alloc::boxed::Box;
+use anyhow::Result;
 use core::fmt::{Debug, Display};
 use core::ops::DerefMut;
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use crate::Err;
 
+#[cfg(not(feature = "std"))]
+use crate::io::ReadBuf;
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
 
 use crate::core::framed::IoError;
-#[cfg(not(feature = "std"))]
-use crate::core::io::ReadBuf;
 
 pub trait AsyncRead {
     type Error: Debug + Display;
@@ -27,11 +29,11 @@ macro_rules! deref_async_read {
             mut self: Pin<&mut Self>,
             cx: &mut Context<'_>,
             buf: &mut ReadBuf<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
+        ) -> Poll<Result<()>> {
             match Pin::new(&mut **self).poll_read(cx, buf) {
                 Poll::Ready(result) => match result {
                     Ok(_) => Poll::Ready(Ok(())),
-                    Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
+                    Err(_) => Poll::Ready(Err!(IoError::DecodeWhileReadError)),
                 },
                 Poll::Pending => Poll::Pending,
             }
@@ -40,13 +42,13 @@ macro_rules! deref_async_read {
 }
 
 impl<T: ?Sized + AsyncRead + Unpin> AsyncRead for Box<T> {
-    type Error = IoError;
+    type Error = anyhow::Error;
 
     deref_async_read!();
 }
 
 impl<T: ?Sized + AsyncRead + Unpin> AsyncRead for &mut T {
-    type Error = IoError;
+    type Error = anyhow::Error;
 
     deref_async_read!();
 }
@@ -56,7 +58,7 @@ where
     P: DerefMut + Unpin,
     P::Target: AsyncRead,
 {
-    type Error = IoError;
+    type Error = anyhow::Error;
 
     fn poll_read(
         self: Pin<&mut Self>,
@@ -66,7 +68,7 @@ where
         match self.get_mut().as_mut().poll_read(cx, buf) {
             Poll::Ready(result) => match result {
                 Ok(_) => Poll::Ready(Ok(())),
-                Err(_) => Poll::Ready(Err(IoError::DecodeWhileReadError)),
+                Err(err) => Poll::Ready(Err!(err)),
             },
             Poll::Pending => Poll::Pending,
         }

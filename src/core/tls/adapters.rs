@@ -2,15 +2,21 @@
 //! `<https://github.com/embassy-rs/embedded-io/blob/master/src/adapters/tokio.rs>`
 
 use alloc::borrow::Cow;
+use anyhow::Result;
 use core::pin::Pin;
 use core::task::Poll;
+
+#[cfg(not(feature = "std"))]
+use crate::io::ReadBuf;
+#[cfg(feature = "std")]
+use tokio::io::ReadBuf;
 
 use embedded_io::asynch::{Read, Write};
 use embedded_io::Io;
 
 use crate::core::framed::IoError;
 use crate::core::io;
-use crate::core::tcp::Connect;
+use crate::core::tcp::TcpConnect;
 use crate::Err;
 
 /// An adapter to implement `embedded::io::{Io, Read, Write}` for `T`.
@@ -39,13 +45,11 @@ impl<T> FromTokio<T> {
     }
 }
 
-impl<'a, T: Connect<'a>> Connect<'a> for FromTokio<T> {
-    type Error = anyhow::Error;
-
-    async fn connect(&self, ip: Cow<'a, str>) -> anyhow::Result<()> {
-        match self.inner.connect(ip).await {
-            Err(err) => Err!(err),
-            Ok(_) => Ok(()),
+impl<'a, T: TcpConnect<'a>> TcpConnect<'a> for FromTokio<T> {
+    async fn connect(ip: Cow<'a, str>) -> Result<Self> {
+        match T::connect(ip).await {
+            Err(conn_err) => Err(conn_err),
+            Ok(stream) => Ok( Self { inner: stream } )
         }
     }
 }
@@ -57,7 +61,7 @@ impl<T> Io for FromTokio<T> {
 impl<T: io::AsyncRead + Unpin> Read for FromTokio<T> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         poll_fn::poll_fn(|cx| {
-            let mut buf = tokio::io::ReadBuf::new(buf);
+            let mut buf = ReadBuf::new(buf);
             match Pin::new(&mut self.inner).poll_read(cx, &mut buf) {
                 Poll::Ready(r) => match r {
                     Ok(_) => Poll::Ready(Ok(buf.filled().len())),

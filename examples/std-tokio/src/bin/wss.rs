@@ -8,15 +8,15 @@ use embedded_websocket::framer_async::{Framer, ReadResult};
 
 use tokio::net;
 use em_as_net::core::framed::{Codec, Framed};
-use em_as_net::core::tcp::TcpStream;
+use em_as_net::core::tcp::TcpSocket;
 use em_as_net::core::tls::{TlsConnection, FromTokio};
 
 #[tokio::main]
 async fn main() {
-    let stream: TcpStream<net::TcpStream> = TcpStream::new();
+    let stream: TcpSocket<net::TcpStream> = TcpSocket::new();
     let mut read_record_buffer = [0; 16384];
     let mut write_record_buffer = [0; 16384];
-    let tls: TlsConnection<FromTokio<TcpStream<net::TcpStream>>, Aes128GcmSha256> = TlsConnection::new();
+    let tls: TlsConnection<FromTokio<TcpSocket<net::TcpStream>>, Aes128GcmSha256> = TlsConnection::new();
     tls.open("limpidcrypto.de:6005".into(), FromTokio::new(stream), &mut read_record_buffer, &mut write_record_buffer).await.unwrap();
 
     let mut stream = Framed::new(tls, Codec::new());
