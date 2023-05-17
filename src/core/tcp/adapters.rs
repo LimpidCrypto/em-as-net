@@ -2,7 +2,7 @@ use alloc::borrow::Cow;
 use anyhow::Result;
 
 
-pub trait AdaptConnect<'a> {
+pub trait AdapterConnect<'a> {
     /// Defines and connects the `inner` of an adapter to the host
     async fn connect(ip: Cow<'a, str>) -> Result<Self>
     where
@@ -10,13 +10,13 @@ pub trait AdaptConnect<'a> {
 }
 
 #[cfg(feature = "std")]
-pub use std_adapters::TcpTokio;
+pub use std_adapters::TcpAdapterTokio;
 
 #[cfg(feature = "std")]
 mod std_adapters {
     use crate::core::framed::IoError;
     use crate::core::io;
-    use crate::core::tcp::adapters::AdaptConnect;
+    use crate::core::tcp::adapters::AdapterConnect;
     use crate::core::tcp::errors::TcpError;
     use crate::Err;
     use alloc::borrow::Cow;
@@ -30,11 +30,11 @@ mod std_adapters {
     use tokio::net::TcpStream;
 
     #[derive(Debug)]
-    pub struct TcpTokio {
+    pub struct TcpAdapterTokio {
         inner: RefCell<Option<TcpStream>>,
     }
 
-    impl<'a> AdaptConnect<'a> for TcpTokio {
+    impl<'a> AdapterConnect<'a> for TcpAdapterTokio {
         async fn connect(ip: Cow<'a, str>) -> Result<Self> {
             match TcpStream::connect(&*ip).await {
                 Err(_) => Err!(TcpError::UnableToConnect),
@@ -45,7 +45,7 @@ mod std_adapters {
         }
     }
 
-    impl io::AsyncRead for TcpTokio {
+    impl io::AsyncRead for TcpAdapterTokio {
         type Error = anyhow::Error;
 
         fn poll_read(
@@ -66,7 +66,7 @@ mod std_adapters {
         }
     }
 
-    impl io::AsyncWrite for TcpTokio {
+    impl io::AsyncWrite for TcpAdapterTokio {
         fn poll_write(
             self: Pin<&mut Self>,
             cx: &mut Context<'_>,

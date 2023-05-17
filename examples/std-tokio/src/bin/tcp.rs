@@ -7,12 +7,12 @@ use tokio::net;
 use em_as_net::core::framed::IoError;
 use em_as_net::core::io::{AsyncRead, AsyncWrite};
 use em_as_net::core::tcp::{TcpConnect, TcpSocket};
-use em_as_net::core::tcp::adapters::TcpTokio;
+use em_as_net::core::tcp::adapters::TcpAdapterTokio;
 
 #[tokio::main]
 async fn main() {
     // Connect to an echo server.
-    let mut socket = TcpSocket::<TcpTokio>::connect("tcpbin.com:4242".into()).await.unwrap();
+    let mut socket = TcpSocket::<TcpAdapterTokio>::connect("tcpbin.com:4242".into()).await.unwrap();
     // write to echo server
     poll_fn(|cx| { Pin::new(&mut socket).poll_write(cx, b"Hello, world") }).await.unwrap();
     // flush buffer

@@ -24,7 +24,7 @@ pub struct WebsocketClient<'a, T, U: RngCore> {
 #[cfg(feature = "std")]
 mod if_std {
     use crate::core::framed::{Codec, Framed};
-    use crate::core::tcp::{adapters::TcpTokio, TcpConnect, TcpSocket};
+    use crate::core::tcp::{adapters::TcpAdapterTokio, TcpConnect, TcpSocket};
     use alloc::borrow::Cow;
     use alloc::string::{String, ToString};
     use anyhow::Result;
@@ -40,7 +40,7 @@ mod if_std {
     use rand::rngs::ThreadRng;
     use url::Url;
 
-    impl<'a> WebsocketClient<'a, TcpTokio, ThreadRng> {
+    impl<'a> WebsocketClient<'a, TcpAdapterTokio, ThreadRng> {
         pub fn new(uri: Cow<'a, str>, buffer: &'a mut [u8]) -> Self {
             Self {
                 uri,
@@ -83,7 +83,7 @@ mod if_std {
             };
 
             // Connect TCP
-            let tcp_socket = match TcpSocket::<TcpTokio>::connect(Cow::from(String::from_iter([
+            let tcp_socket = match TcpSocket::<TcpAdapterTokio>::connect(Cow::from(String::from_iter([
                 domain,
                 port.as_str(),
                 uri_path,
@@ -125,7 +125,7 @@ mod if_std {
         }
     }
 
-    impl<'a> WebsocketClientIo<'a> for WebsocketClient<'a, TcpTokio, ThreadRng> {
+    impl<'a> WebsocketClientIo<'a> for WebsocketClient<'a, TcpAdapterTokio, ThreadRng> {
         async fn read(&mut self) -> Option<Result<ReadResult<'_>>> {
             if let Some(framer) = self.framer.borrow_mut().as_mut() {
                 let read_result = framer

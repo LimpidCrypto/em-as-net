@@ -1,6 +1,6 @@
 use crate::core::framed::IoError;
 use crate::core::io;
-use crate::core::tcp::adapters::AdaptConnect;
+use crate::core::tcp::adapters::AdapterConnect;
 use crate::Err;
 use alloc::borrow::Cow;
 use anyhow::Result;
@@ -24,7 +24,7 @@ pub struct TcpSocket<T> {
 
 impl<'a, T> TcpConnect<'a> for TcpSocket<T>
 where
-    T: AdaptConnect<'a>,
+    T: AdapterConnect<'a>,
 {
     async fn connect(ip: Cow<'a, str>) -> Result<Self> {
         match T::connect(ip).await {
