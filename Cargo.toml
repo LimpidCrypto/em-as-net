@@ -29,6 +29,7 @@ embedded-io = { version = "0.4.0", features = ["async"] }
 pin-project-lite = "0.2.9"
 strum_macros = { version = "0.24.2", default-features = false }
 url = { version = "2.3.1", default-features = false }
+embedded-nal-async = "0.4.0"
 
 [dependencies.embedded-websocket]
 # git version needed to use `framer_async`
@@ -40,7 +41,7 @@ default-features = false
 git = "https://github.com/embassy-rs/embassy"
 package = "embassy-net"
 version = "0.1.0"
-features = ["nightly", "tcp", "medium-ethernet", "dhcpv4", "unstable-traits"]
+features = ["nightly", "tcp", "medium-ethernet", "dhcpv4", "proto-ipv6", "unstable-traits"]
 
 [dependencies.embassy-net-driver]
 git = "https://github.com/embassy-rs/embassy"
@@ -59,15 +60,11 @@ version = "0.1.0"
 optional = true
 
 [features]
-default = ["std"]
-ipv4 = []
-ipv6 = []
+default = ["std", "core", "client"]
+core = []
+client = []
 tls = [
     "embedded-tls",
-]
-dns = [
-    "embassy-net/dns",
-    "ipv4",
 ]
 ws = []
 json-rpc = []

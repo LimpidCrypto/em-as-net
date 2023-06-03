@@ -13,25 +13,31 @@ use core::task::{Context, Poll};
 use crate::io::ReadBuf;
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
+use crate::core::tcp::errors::TcpError;
 
 pub mod adapters;
 pub mod errors;
 
 #[derive(Debug)]
 pub struct TcpSocket<T> {
-    pub(crate) stream: RefCell<Option<T>>,
+    pub(crate) inner: RefCell<Option<T>>,
+}
+
+impl<T> TcpSocket<T> {
+    pub fn new(s: T) -> Self {
+        Self { inner: RefCell::new(Some(s)) }
+    }
 }
 
 impl<'a, T> TcpConnect<'a> for TcpSocket<T>
 where
     T: AdapterConnect<'a>,
 {
-    async fn connect(ip: Cow<'a, str>) -> Result<Self> {
-        match T::connect(ip).await {
-            Ok(adapter) => Ok(Self {
-                stream: RefCell::new(Some(adapter)),
-            }),
-            Err(conn_err) => Err!(conn_err),
+    async fn connect(&self, ip: Cow<'a, str>) -> Result<()> {
+
+        match self.inner.borrow_mut().as_mut() {
+            None => Err!(TcpError::UnableToConnect),
+            Some(s) => Ok(s.connect(ip).await?),
         }
     }
 }
@@ -47,7 +53,7 @@ where
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<()>> {
-        match self.stream.borrow_mut().as_mut() {
+        match self.inner.borrow_mut().as_mut() {
             None => Poll::Ready(Err!(IoError::ReadNotConnected)),
             Some(mut stream) => Pin::new(&mut stream).poll_read(cx, buf),
         }
@@ -59,29 +65,28 @@ where
     T: io::AsyncWrite + Unpin,
 {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
-        match self.stream.borrow_mut().as_mut() {
+        match self.inner.borrow_mut().as_mut() {
             None => Poll::Ready(Err!(IoError::WriteNotConnected)),
             Some(mut stream) => Pin::new(&mut stream).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.stream.borrow_mut().as_mut() {
+        match self.inner.borrow_mut().as_mut() {
             None => Poll::Ready(Err!(IoError::FlushNotConnected)),
             Some(mut stream) => Pin::new(&mut stream).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.stream.borrow_mut().as_mut() {
+        match self.inner.borrow_mut().as_mut() {
             None => Poll::Ready(Err!(IoError::ShutdownNotConnected)),
             Some(mut stream) => Pin::new(&mut stream).poll_shutdown(cx),
         }
     }
 }
 
-pub trait TcpConnect<'a> {
-    async fn connect(ip: Cow<'a, str>) -> Result<Self>
-    where
-        Self: Sized;
+pub trait TcpConnect<'a>
+{
+    async fn connect(&self, ip: Cow<'a, str>) -> Result<()>;
 }

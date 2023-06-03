@@ -1,14 +1,6 @@
 use alloc::borrow::Cow;
 use anyhow::Result;
 
-
-pub trait AdapterConnect<'a> {
-    /// Defines and connects the `inner` of an adapter to the host
-    async fn connect(ip: Cow<'a, str>) -> Result<Self>
-    where
-        Self: Sized;
-}
-
 #[cfg(feature = "std")]
 pub use std_adapters::TcpAdapterTokio;
 
@@ -34,13 +26,20 @@ mod std_adapters {
         inner: RefCell<Option<TcpStream>>,
     }
 
+    impl TcpAdapterTokio {
+        pub fn new() -> Self {
+            Self { inner: RefCell::new(None) }
+        }
+    }
+
     impl<'a> AdapterConnect<'a> for TcpAdapterTokio {
-        async fn connect(ip: Cow<'a, str>) -> Result<Self> {
+        async fn connect(&self, ip: Cow<'a, str>) -> Result<()> {
             match TcpStream::connect(&*ip).await {
-                Err(_) => Err!(TcpError::UnableToConnect),
-                Ok(stream) => Ok(Self {
-                    inner: RefCell::new(Some(stream)),
-                }),
+                Err(_) => Err!(TcpError::UnableToConnect), // TODO: return the error returned by `tokio::net::TcpStream`
+                Ok(stream) => {
+                    self.inner.replace(Some(stream));
+                    Ok(())
+                },
             }
         }
     }
@@ -213,4 +212,9 @@ mod no_std_adapters {
     //         }
     //     }
     // }
+}
+
+pub trait AdapterConnect<'a> {
+    /// Defines and connects the `inner` of an adapter to the host
+    async fn connect(&self, ip: Cow<'a, str>) -> Result<()>;
 }

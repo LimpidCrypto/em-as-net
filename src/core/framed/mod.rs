@@ -30,10 +30,7 @@ pin_project! {
     }
 }
 
-impl<T, U> Framed<T, U>
-where
-    T: AsyncRead + AsyncWrite,
-{
+impl<T, U> Framed<T, U> {
     pub fn new(inner: T, codec: U) -> Framed<T, U> {
         Framed {
             inner: FramedImpl {
