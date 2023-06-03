@@ -1,7 +1,7 @@
 mod a;
 
-use alloc::borrow::Cow;
 pub use a::A;
+use alloc::borrow::Cow;
 mod aaaa;
 pub use aaaa::Aaaa;
 mod errors;

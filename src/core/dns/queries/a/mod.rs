@@ -1,10 +1,10 @@
 use super::errors::DnsError;
-use anyhow::Result;
+use crate::core::dns::queries::Lookup;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
+use anyhow::Result;
 use core::net::SocketAddr;
 use embedded_nal_async::Ipv4Addr;
-use crate::core::dns::queries::Lookup;
 
 #[derive(Debug)]
 pub struct A;
@@ -12,8 +12,8 @@ pub struct A;
 #[cfg(feature = "std")]
 mod if_std {
     use super::*;
-    use tokio::net::lookup_host;
     use crate::Err;
+    use tokio::net::lookup_host;
 
     impl<'a> Lookup<'a, Ipv4Addr> for A {
         async fn lookup(url: Cow<'a, str>) -> Result<Ipv4Addr> {
@@ -26,7 +26,7 @@ mod if_std {
                 .collect::<Vec<SocketAddr>>()
                 .first()
             {
-                Some(SocketAddr::V4(addrs)) => Ok( Ipv4Addr::from(addrs.ip().octets()) ),
+                Some(SocketAddr::V4(addrs)) => Ok(Ipv4Addr::from(addrs.ip().octets())),
                 None => Err!(DnsError::LookupIpv4Error(url.clone())),
                 _ => Err!(DnsError::LookupIpv4Error(url.clone())),
             };

@@ -1,8 +1,8 @@
 use super::errors::DnsError;
-use anyhow::Result;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
-use core::net::{SocketAddr};
+use anyhow::Result;
+use core::net::SocketAddr;
 use embedded_nal_async::Ipv6Addr;
 
 #[derive(Debug)]
@@ -11,9 +11,9 @@ pub struct Aaaa;
 #[cfg(feature = "std")]
 mod if_std {
     use super::*;
-    use tokio::net::lookup_host;
     use crate::core::dns::queries::Lookup;
     use crate::Err;
+    use tokio::net::lookup_host;
 
     impl<'a> Lookup<'a, Ipv6Addr> for Aaaa {
         async fn lookup(url: Cow<'a, str>) -> Result<Ipv6Addr> {
@@ -26,7 +26,7 @@ mod if_std {
                 .collect::<Vec<SocketAddr>>()
                 .first()
             {
-                Some(SocketAddr::V6(addrs)) => Ok( Ipv6Addr::from(addrs.ip().octets()) ),
+                Some(SocketAddr::V6(addrs)) => Ok(Ipv6Addr::from(addrs.ip().octets())),
                 None => Err!(DnsError::LookupIpv6Error(url.clone())),
                 _ => Err!(DnsError::LookupIpv6Error(url.clone())),
             };

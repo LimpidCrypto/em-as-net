@@ -82,7 +82,12 @@ where
     T: TcpConnect<'a> + AsyncRead + AsyncWrite + Unpin,
     R: RngCore,
 {
-    async fn connect(&mut self, socket: T, options: Option<WebsocketOptions<'a>>, rng: R) -> Result<()> {
+    async fn connect(
+        &mut self,
+        socket: T,
+        options: Option<WebsocketOptions<'a>>,
+        rng: R,
+    ) -> Result<()> {
         // parse uri
         let url = self.get_url()?;
         let domain = self.get_domain(&url)?;
@@ -104,14 +109,17 @@ where
         };
 
         // Connect TCP
-        let ip = self.lookup_ip(String::from_iter([domain, ":", &*port]).as_str()).await?;
-        socket.connect(Cow::from(String::from_iter([
-            ip.to_string().as_str(),
-            ":",
-            &*port,
-            &*uri_path,
-            query,
-        ])))
+        let ip = self
+            .lookup_ip(String::from_iter([domain, ":", &*port]).as_str())
+            .await?;
+        socket
+            .connect(Cow::from(String::from_iter([
+                ip.to_string().as_str(),
+                ":",
+                &*port,
+                &*uri_path,
+                query,
+            ])))
             .await?;
 
         // initialize socket
@@ -221,7 +229,12 @@ where
 }
 
 pub trait WebsocketClientConnect<'a, T, R: RngCore> {
-    async fn connect(&mut self, socket: T, options: Option<WebsocketOptions<'a>>, rng: R) -> Result<()>;
+    async fn connect(
+        &mut self,
+        socket: T,
+        options: Option<WebsocketOptions<'a>>,
+        rng: R,
+    ) -> Result<()>;
 }
 
 pub trait WebsocketClientIo<'a> {

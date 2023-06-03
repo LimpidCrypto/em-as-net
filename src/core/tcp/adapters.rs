@@ -28,7 +28,9 @@ mod std_adapters {
 
     impl TcpAdapterTokio {
         pub fn new() -> Self {
-            Self { inner: RefCell::new(None) }
+            Self {
+                inner: RefCell::new(None),
+            }
         }
     }
 
@@ -39,7 +41,7 @@ mod std_adapters {
                 Ok(stream) => {
                     self.inner.replace(Some(stream));
                     Ok(())
-                },
+                }
             }
         }
     }

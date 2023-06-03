@@ -9,11 +9,11 @@ use core::fmt::Debug;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
+use crate::core::tcp::errors::TcpError;
 #[cfg(not(feature = "std"))]
 use crate::io::ReadBuf;
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
-use crate::core::tcp::errors::TcpError;
 
 pub mod adapters;
 pub mod errors;
@@ -25,7 +25,9 @@ pub struct TcpSocket<T> {
 
 impl<T> TcpSocket<T> {
     pub fn new(s: T) -> Self {
-        Self { inner: RefCell::new(Some(s)) }
+        Self {
+            inner: RefCell::new(Some(s)),
+        }
     }
 }
 
@@ -34,7 +36,6 @@ where
     T: AdapterConnect<'a>,
 {
     async fn connect(&self, ip: Cow<'a, str>) -> Result<()> {
-
         match self.inner.borrow_mut().as_mut() {
             None => Err!(TcpError::UnableToConnect),
             Some(s) => Ok(s.connect(ip).await?),
@@ -86,7 +87,6 @@ where
     }
 }
 
-pub trait TcpConnect<'a>
-{
+pub trait TcpConnect<'a> {
     async fn connect(&self, ip: Cow<'a, str>) -> Result<()>;
 }

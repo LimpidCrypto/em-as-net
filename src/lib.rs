@@ -10,11 +10,11 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std as alloc;
 
+#[cfg(feature = "client")]
+pub mod client;
 pub mod constants;
 #[cfg(feature = "core")]
 pub mod core;
-#[cfg(feature = "client")]
-pub mod client;
 pub mod utils;
 
 mod _anyhow;
