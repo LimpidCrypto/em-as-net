@@ -38,15 +38,6 @@ impl<'a, T, R: RngCore> WebsocketClient<'a, T, R> {
         }
     }
 
-    fn get_uri_path(&self, url: &'a Url) -> Result<&'a str> {
-        let path = self.get_path(url);
-
-        match path {
-            "/" => Ok("".into()),
-            path => Ok(path),
-        }
-    }
-
     fn get_ws_options_path(&self, url: &'a Url) -> Result<&'a str> {
         let path = self.get_path(url);
 
@@ -92,12 +83,10 @@ where
         let url = self.get_url()?;
         let domain = self.get_domain(&url)?;
         let port = self.get_port(&url)?.to_string();
-        let uri_path = self.get_uri_path(&url)?;
         let opt_path = self.get_ws_options_path(&url)?;
-        let query = self.get_query(&url).unwrap_or("");
 
         // get websocket options
-        let options = match options {
+        let ws_options = match options {
             Some(options) => options,
             None => WebsocketOptions {
                 path: opt_path,
@@ -112,17 +101,16 @@ where
         let ip = self
             .lookup_ip(String::from_iter([domain, ":", &*port]).as_str())
             .await?;
+
         socket
             .connect(Cow::from(String::from_iter([
                 ip.to_string().as_str(),
                 ":",
                 &*port,
-                &*uri_path,
-                query,
             ])))
             .await?;
 
-        // initialize socket
+        // define socket
         let framed = Framed::new(socket, Codec::new());
         self.socket.replace(Some(framed));
 
@@ -136,7 +124,7 @@ where
                     Some(s) => s,
                 },
                 self.buffer,
-                &options,
+                &ws_options,
             )
             .await
         {
@@ -250,8 +238,8 @@ pub trait WebsocketClientIo<'a> {
 trait UriParser<'a> {
     fn get_scheme(&self, url: &Url) -> Result<&'a str> {
         match url.scheme() {
-            "ws" => Ok("ws"),
-            "wss" => Ok("wss"),
+            "ws" => Ok("http"),
+            "wss" => Ok("https"),
             invalid => Err!(AddrsError::InvalidScheme(invalid)),
         }
     }
@@ -267,8 +255,8 @@ trait UriParser<'a> {
         match url.port() {
             None => match self.get_scheme(url) {
                 Err(invalid_scheme) => Err(invalid_scheme),
-                Ok("ws") => Ok(80),
-                Ok("wss") => Ok(443),
+                Ok("http") => Ok(80),
+                Ok("https") => Ok(443),
                 _ => Err!(AddrsError::InvalidScheme("")),
             },
             Some(port) => Ok(port),
@@ -277,10 +265,6 @@ trait UriParser<'a> {
 
     fn get_path(&self, url: &'a Url) -> &'a str {
         url.path()
-    }
-
-    fn get_query(&self, url: &'a Url) -> Option<&'a str> {
-        url.query()
     }
 
     fn get_url(&self) -> Result<Url>;

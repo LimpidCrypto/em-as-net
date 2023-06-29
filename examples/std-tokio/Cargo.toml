@@ -7,7 +7,6 @@ edition = "2021"
 em-as-net = { path = "../.." }
 tokio = { version = "1.27.0", features = ["full"] }
 rand = "0.8.5"
-embedded-tls = { version = "0.13.0", default-features = false, optional = true }
 embedded-io = { version = "0.4.0", features = ["async"] }
 
 [dependencies.embedded-websocket]
@@ -21,20 +20,10 @@ path = "src/bin/tcp.rs"
 required-features = []
 
 [[bin]]
-name = "adapter_from_tokio"
-path = "src/bin/adapter_from_tokio.rs"
-required-features = [
-    "em-as-net/tls",
-]
-
-[[bin]]
 name = "tls"
 path = "src/bin/tls.rs"
 required-features = [
     "em-as-net/tls",
-    "embedded-tls/async",
-    "embedded-tls/std",
-    "embedded-tls/tokio",
 ]
 
 [[bin]]
@@ -48,7 +37,4 @@ name = "wss"
 path = "src/bin/wss.rs"
 required-features = [
     "em-as-net/tls",
-    "embedded-tls/async",
-    "embedded-tls/std",
-    "embedded-tls/tokio"
 ]

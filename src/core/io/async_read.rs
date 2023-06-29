@@ -67,7 +67,7 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         match self.get_mut().as_mut().poll_read(cx, buf) {
             Poll::Ready(result) => match result {
-                Ok(_) => Poll::Ready(Ok(())),
+                Ok(()) => Poll::Ready(Ok(())),
                 Err(err) => Poll::Ready(Err!(err)),
             },
             Poll::Pending => Poll::Pending,

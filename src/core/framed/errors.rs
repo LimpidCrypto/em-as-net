@@ -1,6 +1,6 @@
 use thiserror_no_std::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum IoError {
     #[error("Failed to encode message while starting send.")]
     EncodeWhileSendError,
@@ -54,6 +54,10 @@ pub enum IoError {
     // embedded_io errors
     #[error("{0:?}")]
     Io(embedded_io::ErrorKind),
+
+    // Tls errors during IO
+    #[error("TLS: {0:?}")]
+    TlsRead(embedded_tls::TlsError),
 }
 
 impl embedded_io::Error for IoError {

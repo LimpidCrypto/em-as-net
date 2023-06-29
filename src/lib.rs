@@ -1,5 +1,5 @@
-// #![no_std]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
+// #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(incomplete_features)]
 #![feature(async_fn_in_trait)]
 #![feature(ip_in_core)]

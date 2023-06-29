@@ -12,7 +12,9 @@ use em_as_net::core::tcp::adapters::TcpAdapterTokio;
 #[tokio::main]
 async fn main() {
     // Connect to an echo server.
-    let mut socket = TcpSocket::<TcpAdapterTokio>::connect("tcpbin.com:4242".into()).await.unwrap();
+    let tokio_adapter = TcpAdapterTokio::new();
+    let mut socket = TcpSocket::new(tokio_adapter);
+    socket.connect("tcpbin.com:4242".into()).await.unwrap();
     // write to echo server
     poll_fn(|cx| { Pin::new(&mut socket).poll_write(cx, b"Hello, world") }).await.unwrap();
     // flush buffer

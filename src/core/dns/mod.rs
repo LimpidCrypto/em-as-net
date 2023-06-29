@@ -3,9 +3,9 @@ mod queries;
 use crate::core::dns::queries::{Aaaa, Lookup, A};
 use alloc::borrow::Cow;
 use anyhow::Result;
+use core::marker::PhantomData;
 use embedded_nal_async::{IpAddr, Ipv4Addr, Ipv6Addr};
 pub use queries::DnsError;
-use std::marker::PhantomData;
 
 /// Tries to look up IPv6 addresses first. If it fails it then tries to look up IPv4 addresses.
 pub async fn lookup(url: Cow<'_, str>) -> Result<IpAddr> {
