@@ -7,7 +7,7 @@ use core::pin::Pin;
 use core::task::{Context, Poll};
 
 #[cfg(not(feature = "std"))]
-use crate::io::ReadBuf;
+use crate::core::io::ReadBuf;
 #[cfg(feature = "std")]
 use tokio::io::ReadBuf;
 

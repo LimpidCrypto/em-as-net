@@ -8,7 +8,6 @@ use crate::Err;
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
 use anyhow::Result;
-use core::cell::RefCell;
 use embedded_nal_async::IpAddr;
 use embedded_websocket::framer_async::Framer;
 use embedded_websocket::{Client, WebSocketCloseStatusCode};
@@ -22,8 +21,8 @@ pub use embedded_websocket::{
 };
 
 pub struct WebsocketClient<'a, T, R: RngCore> {
-    socket: RefCell<Option<Framed<T, Codec>>>,
-    framer: RefCell<Option<Framer<R, Client>>>,
+    socket: Option<Framed<T, Codec>>,
+    framer: Option<Framer<R, Client>>,
     uri: Cow<'a, str>,
     buffer: &'a mut [u8],
 }
@@ -31,8 +30,8 @@ pub struct WebsocketClient<'a, T, R: RngCore> {
 impl<'a, T, R: RngCore> WebsocketClient<'a, T, R> {
     pub fn new(uri: Cow<'a, str>, buffer: &'a mut [u8]) -> Self {
         Self {
-            socket: RefCell::new(None),
-            framer: RefCell::new(None),
+            socket: None,
+            framer: None,
             uri,
             buffer,
         }
@@ -102,6 +101,7 @@ where
             .lookup_ip(String::from_iter([domain, ":", &*port]).as_str())
             .await?;
 
+        let mut socket = socket;
         socket
             .connect(Cow::from(String::from_iter([
                 ip.to_string().as_str(),
@@ -112,14 +112,14 @@ where
 
         // define socket
         let framed = Framed::new(socket, Codec::new());
-        self.socket.replace(Some(framed));
+        self.socket = Some(framed);
 
         // Connect Websocket
         let ws_client = embedded_websocket::WebSocketClient::new_client(rng);
         let mut framer = Framer::new(ws_client);
         if let Err(framer_err) = framer
             .connect(
-                &mut match self.socket.borrow_mut().as_mut() {
+                match &mut self.socket {
                     None => return Err!(WebsocketError::<anyhow::Error>::NotConnected),
                     Some(s) => s,
                 },
@@ -131,7 +131,7 @@ where
             return Err!(WebsocketError::from(framer_err));
         }
 
-        self.framer.replace(Some(framer));
+        self.framer = Some(framer);
 
         Ok(())
     }
@@ -143,10 +143,10 @@ where
     R: RngCore,
 {
     async fn read(&mut self) -> Option<Result<ReadResult<'_>>> {
-        if let Some(framer) = self.framer.borrow_mut().as_mut() {
+        if let Some(framer) = &mut self.framer {
             let read_result = framer
                 .read(
-                    &mut match self.socket.borrow_mut().as_mut() {
+                    match &mut self.socket {
                         None => return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected)),
                         Some(stream) => stream,
                     },
@@ -161,7 +161,7 @@ where
             };
         }
 
-        return Some(Err!(WebsocketError::<anyhow::Error>::NotConnected));
+        Some(Err!(WebsocketError::<anyhow::Error>::NotConnected))
     }
 
     async fn write(
@@ -169,10 +169,10 @@ where
         message: Cow<'a, str>,
         send_msg_type: Option<WebsocketSendMessageType>,
     ) -> Result<()> {
-        if let Some(framer) = self.framer.borrow_mut().as_mut() {
+        if let Some(framer) = &mut self.framer {
             return match framer
                 .write(
-                    match self.socket.borrow_mut().as_mut() {
+                    match &mut self.socket {
                         None => {
                             return Err!(WebsocketError::<anyhow::Error>::NotConnected);
                         }
@@ -190,14 +190,14 @@ where
             };
         }
 
-        return Err!(WebsocketError::<anyhow::Error>::NotConnected);
+        Err!(WebsocketError::<anyhow::Error>::NotConnected)
     }
 
     async fn close(&mut self) -> Result<()> {
-        if let Some(framer) = self.framer.borrow_mut().as_mut() {
+        if let Some(framer) = &mut self.framer {
             return match framer
                 .close(
-                    &mut match self.socket.borrow_mut().as_mut() {
+                    match &mut self.socket {
                         None => return Err!(WebsocketError::<anyhow::Error>::NotConnected),
                         Some(stream) => stream,
                     },
@@ -212,7 +212,7 @@ where
             };
         }
 
-        return Err!(WebsocketError::<anyhow::Error>::NotConnected);
+        Err!(WebsocketError::<anyhow::Error>::NotConnected)
     }
 }
 

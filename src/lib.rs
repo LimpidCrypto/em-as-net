@@ -10,10 +10,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std as alloc;
 
-#[cfg(feature = "client")]
+#[cfg(any(feature = "json-rpc", feature = "websocket"))]
 pub mod client;
 pub mod constants;
-#[cfg(feature = "core")]
 pub mod core;
 pub mod utils;
 

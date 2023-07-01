@@ -12,10 +12,10 @@ pub async fn lookup(url: Cow<'_, str>) -> Result<IpAddr> {
     let dns_a = Dns::<A>::new(url.clone());
     let dns_aaaa = Dns::<Aaaa>::new(url);
 
-    return match dns_aaaa.lookup().await {
+    match dns_aaaa.lookup().await {
         Ok(addrs) => Ok(IpAddr::V6(addrs)),
         Err(_) => Ok(IpAddr::V4(dns_a.lookup().await?)),
-    };
+    }
 }
 
 pub struct Dns<'a, T = Aaaa> {

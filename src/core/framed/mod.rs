@@ -165,7 +165,7 @@ where
     }
 }
 
-impl<'a, T> From<T> for Framed<T, Codec>
+impl<T> From<T> for Framed<T, Codec>
 where
     T: AsyncRead + AsyncWrite,
 {

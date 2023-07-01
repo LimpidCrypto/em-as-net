@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use em_as_net::client::websocket::{WebsocketClient, ReadResult, WebsocketClientIo, WebsocketClientConnect, WebsocketOptions};
+use em_as_net::client::websocket::{WebsocketClient, ReadResult, WebsocketClientIo, WebsocketClientConnect};
 use em_as_net::core::tcp::TcpSocket;
 use em_as_net::core::tcp::adapters::TcpAdapterTokio;
 
