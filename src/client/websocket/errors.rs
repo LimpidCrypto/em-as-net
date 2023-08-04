@@ -41,18 +41,3 @@ impl<E: Debug> From<FramerError<E>> for WebsocketError<E> {
 
 #[cfg(feature = "std")]
 impl<E: Debug> alloc::error::Error for WebsocketError<E> {}
-
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum AddrsError<'a> {
-    #[error(transparent)]
-    InvalidFormat(#[from] url::ParseError),
-    #[error("Scheme must be either 'ws' or 'wss'. (found: {0:?})")]
-    InvalidScheme(&'a str),
-    #[error("Unable to parse domain")]
-    ParseDomainError,
-    #[error("Unable to parse url (found: {0:?})")]
-    ParseUrlError(&'a str),
-}
-
-#[cfg(feature = "std")]
-impl alloc::error::Error for AddrsError<'_> {}

@@ -1,16 +1,15 @@
 pub mod errors;
 
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use anyhow::Result;
-use core::cell::RefCell;
 use core::future::Future;
+use core::net::SocketAddr;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 
 use embedded_io::asynch::{Read, Write};
-use embedded_tls::{NoVerify, TlsCipherSuite, TlsConfig, TlsContext};
-use rand_core::OsRng;
+use embedded_tls::{TlsCipherSuite, TlsConnection, TlsContext, TlsVerifier};
+use rand_core::{CryptoRng, RngCore};
 
 #[cfg(not(feature = "std"))]
 use crate::core::io::ReadBuf;
@@ -24,149 +23,124 @@ use errors::TlsError;
 
 use crate::Err;
 
-pub use embedded_tls::blocking::{Aes128GcmSha256, Aes256GcmSha384};
+// exports
+pub use embedded_tls::{
+    blocking::{Aes128GcmSha256, Aes256GcmSha384},
+    webpki::CertVerifier,
+    NoVerify, TlsConfig,
+};
 
-pub struct TlsConnection<'a, S, C>
+#[derive(Default)]
+pub struct TlsSocket<'a, Socket, Cipher>
 where
-    S: Read + Write + 'a,
-    C: TlsCipherSuite + 'static,
+    Socket: Read + Write + 'a,
+    Cipher: TlsCipherSuite + 'static,
 {
-    tls: RefCell<Option<embedded_tls::TlsConnection<'a, S, C>>>,
-    socket: RefCell<Option<S>>,
-    read_buf: RefCell<&'a mut [u8]>,
-    write_buf: RefCell<&'a mut [u8]>,
+    // TODO: This is just optional so that the `shutdown` works.
+    // TODO: `Option` should be required when I found an elegant solution to `shutdown` the TLS connection
+    inner: Option<TlsConnection<'a, Socket, Cipher>>,
 }
 
-impl<'a, S, C> TlsConnection<'a, S, C>
+impl<'a, Socket, Cipher> TlsSocket<'a, Socket, Cipher>
 where
-    S: Read + Write + TcpConnect<'a> + 'a,
-    C: TlsCipherSuite + 'static,
+    Socket: Read + Write + TcpConnect + 'a,
+    Cipher: TlsCipherSuite + 'static,
 {
-    pub fn new(socket: S, read_buf: &'a mut [u8], write_buf: &'a mut [u8]) -> Self {
-        Self {
-            tls: RefCell::new(None),
-            socket: RefCell::new(Some(socket)),
-            read_buf: RefCell::new(read_buf),
-            write_buf: RefCell::new(write_buf),
+    pub async fn connect<Rng: CryptoRng + RngCore, Verifier: TlsVerifier<'a, Cipher>>(
+        mut socket: Socket,
+        record_read_buf: &'a mut [u8],
+        record_write_buf: &'a mut [u8],
+        rng: &'a mut Rng,
+        config: &'a TlsConfig<'a, Cipher>,
+        socket_addr: SocketAddr,
+    ) -> Result<Self> {
+        socket.connect(socket_addr).await?;
+        let mut tls_connection = TlsConnection::new(socket, record_read_buf, record_write_buf);
+        if let Err(err) = tls_connection
+            .open::<Rng, Verifier>(TlsContext::new(config, rng))
+            .await
+        {
+            return Err!(TlsError::Other(err));
         }
+
+        Ok(Self {
+            inner: Some(tls_connection),
+        })
     }
 }
 
-impl<'a, S, C> TcpConnect<'a> for TlsConnection<'a, S, C>
+impl<'a, Socket, Cipher> io::AsyncRead for TlsSocket<'a, Socket, Cipher>
 where
-    S: Read + Write + TcpConnect<'a> + 'a,
-    C: TlsCipherSuite + 'static,
-{
-    async fn connect(&self, ip: Cow<'a, str>) -> Result<()> {
-        match self.socket.borrow_mut().take() {
-            None => Err!(TlsError::FailedToOpen),
-            Some(socket) => {
-                socket.connect(ip).await?;
-                Ok(self.tls.replace(Some(embedded_tls::TlsConnection::new(
-                    socket,
-                    self.read_buf.take(),
-                    self.write_buf.take(),
-                ))))
-            }
-        }
-        .map_err(|err| err)?;
-
-        match self.tls.borrow_mut().as_mut() {
-            None => {
-                return Err!(TlsError::NotConnected);
-            }
-            Some(tls) => {
-                let mut rng = OsRng; // use rng core generic
-                let config = TlsConfig::new().with_server_name("vi-server.org"); // TODO: This is just for testing; TLS currently not working anyway
-                if let Err(err) = tls
-                    .open::<OsRng, NoVerify>(TlsContext::new(&config, &mut rng))
-                    .await
-                {
-                    return Err!(TlsError::Other(err));
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-impl<'a, S, C> io::AsyncRead for TlsConnection<'a, S, C>
-where
-    S: Read + Write + 'a,
-    C: TlsCipherSuite + 'static,
+    Socket: Read + Write + Unpin + 'a,
+    Cipher: TlsCipherSuite + Unpin + 'static,
+    <Cipher as TlsCipherSuite>::Hash: Unpin,
+    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::OutputSizeUser>::OutputSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
+    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::BlockSizeUser>::BlockSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
 {
     type Error = IoError;
 
     fn poll_read(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        match self.tls.borrow_mut().as_mut() {
-            None => Poll::Ready(Err(IoError::TlsReadNotConnected)),
-            Some(stream) => {
-                match Pin::new(&mut Box::pin(stream.read(buf.filled_mut()))).poll(cx) {
-                    Poll::Ready(result) => match result {
-                        Ok(0) => {
-                            // no data ready
-                            Poll::Pending
-                        }
-                        Ok(_) => Poll::Ready(Ok(())),
-                        Err(e) => return Poll::Ready(Err(IoError::TlsRead(e))),
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+        match self.inner.as_mut() {
+            None => { Poll::Ready(Err(IoError::ReadNotConnected)) }
+            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.read(buf.filled_mut()))).poll(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(0) => {
+                        // no data ready
+                        Poll::Pending
+                    }
+                    Ok(_) => Poll::Ready(Ok(())),
+                    Err(e) => Poll::Ready(Err(IoError::TlsRead(e))),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
     }
 }
 
-impl<'a, S, C> io::AsyncWrite for TlsConnection<'a, S, C>
+impl<'a, Socket, Cipher> io::AsyncWrite for TlsSocket<'a, Socket, Cipher>
 where
-    S: Read + Write + 'a,
-    C: TlsCipherSuite + 'static,
+    Socket: Read + Write + Unpin + 'a,
+    Cipher: TlsCipherSuite + Unpin + 'static,
+    <Cipher as TlsCipherSuite>::Hash: Unpin,
+    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::OutputSizeUser>::OutputSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
+    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::BlockSizeUser>::BlockSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
 {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
-        match self.tls.borrow_mut().as_mut() {
-            None => Poll::Ready(Err!(IoError::TlsWriteNotConnected)),
-            Some(stream) => match Pin::new(&mut Box::pin(stream.write(buf))).poll(cx) {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
+        match self.inner.as_mut() {
+            None => { Poll::Ready(Err!(IoError::WriteNotConnected)) }
+            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.write(buf))).poll(cx) {
                 Poll::Ready(result) => match result {
                     Ok(size) => Poll::Ready(Ok(size)),
                     Err(_) => Poll::Ready(Err!(IoError::UnableToWrite)),
                 },
                 Poll::Pending => Poll::Pending,
-            },
+            }
         }
+
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.tls.borrow_mut().as_mut() {
-            None => Poll::Ready(Err!(IoError::TlsFlushNotConnected)),
-            Some(stream) => {
-                let mut fut = Box::pin(stream.flush());
-                let fut_pinned = Pin::new(&mut fut);
-                match fut_pinned.poll(cx) {
-                    Poll::Ready(result) => match result {
-                        Ok(_) => Poll::Ready(Ok(())),
-                        Err(_) => Poll::Ready(Err!(IoError::UnableToFlush)),
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        match self.inner.as_mut() {
+            None => { Poll::Ready(Err!(IoError::WriteNotConnected)) }
+            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.flush())).poll(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(_) => Poll::Ready(Ok(())),
+                    Err(_) => Poll::Ready(Err!(IoError::UnableToFlush)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.tls.take() {
-            None => Poll::Ready(Err!(IoError::TlsShutdownNotConnected)),
-            Some(stream) => match Pin::new(&mut Box::pin(stream.close())).poll(cx) {
-                Poll::Ready(result) => match result {
-                    Ok(_) => Poll::Ready(Ok(())),
-                    Err(_) => Poll::Ready(Err!(IoError::UnableToClose)),
-                },
-                Poll::Pending => Poll::Pending,
-            },
-        }
+    fn poll_shutdown(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
+        let tls_connection = core::mem::take(&mut self.inner).unwrap();
+
+        // TODO: Find an elegant solution
+        let _ = tls_connection.close();
+        Poll::Ready(Ok(()))
     }
 }
