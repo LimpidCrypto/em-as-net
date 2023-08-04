@@ -229,4 +229,19 @@ where
             None => None,
         }
     }
+
+    pub async fn try_next<'a, B: Deref<Target = [u8]>, E>(
+        &'a mut self,
+        stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
+        buffer: &'a mut [u8],
+    ) -> Result<Option<ReadResult<'_>>>
+    where
+        E: Debug,
+    {
+        match self.inner.read(stream, buffer).await {
+            Some(Ok(read_result)) => Ok(Some(read_result)),
+            Some(Err(error)) => Err!(WebsocketError::from(error)),
+            None => Ok(None),
+        }
+    }
 }

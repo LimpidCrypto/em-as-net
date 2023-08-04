@@ -76,7 +76,7 @@ async fn test_websocket_embedded_ws_tokio() {
 
     loop {
         let message = websocket
-            .next(&mut framed, &mut buffer)
+            .try_next(&mut framed, &mut buffer)
             .await
             .unwrap()
             .unwrap();
