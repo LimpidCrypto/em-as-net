@@ -1,45 +1,27 @@
-use alloc::borrow::Cow;
-use anyhow::Result;
-
 #[cfg(feature = "std")]
 pub use std_adapters::TcpAdapterTokio;
 
 #[cfg(feature = "std")]
 mod std_adapters {
-    use crate::core::framed::IoError;
     use crate::core::io;
-    use crate::core::tcp::adapters::AdapterConnect;
     use crate::core::tcp::errors::TcpError;
     use crate::Err;
-    use alloc::borrow::Cow;
     use anyhow::Result;
     use core::pin::Pin;
     use core::task::{Context, Poll};
     use tokio::io::ReadBuf;
     use tokio::io::{AsyncRead, AsyncWrite};
-    use tokio::net::TcpStream;
-
-    #[derive(Debug, Default)]
+    use tokio::net::{TcpStream, ToSocketAddrs};
+    #[derive(Debug)]
     pub struct TcpAdapterTokio {
-        inner: Option<TcpStream>,
+        pub(crate) inner: TcpStream,
     }
 
     impl TcpAdapterTokio {
-        pub fn new() -> Self {
-            Self {
-                inner: None
-            }
-        }
-    }
-
-    impl<'a> AdapterConnect<'a> for TcpAdapterTokio {
-        async fn connect(&mut self, ip: Cow<'a, str>) -> Result<()> {
-            match TcpStream::connect(&*ip).await {
+        pub async fn connect(ip: impl ToSocketAddrs) -> Result<Self> {
+            match TcpStream::connect(ip).await {
                 Err(_) => Err!(TcpError::UnableToConnect), // TODO: return the error returned by `tokio::net::TcpStream`
-                Ok(stream) => {
-                    self.inner = Some(stream);
-                    Ok(())
-                }
+                Ok(stream) => Ok(Self { inner: stream }),
             }
         }
     }
@@ -52,15 +34,12 @@ mod std_adapters {
             cx: &mut Context<'_>,
             buf: &mut ReadBuf<'_>,
         ) -> Poll<Result<(), Self::Error>> {
-            match Pin::new(&mut self.inner).get_mut() {
-                None => { Poll::Ready(Err!(IoError::ReadNotConnected)) }
-                Some(socket) => match Pin::new(socket).poll_read(cx, buf) {
-                    Poll::Ready(result) => match result {
-                        Ok(()) => { Poll::Ready(Ok(())) }
-                        Err(error) => { Poll::Ready(Err!(error)) }
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+            match Pin::new(&mut self.inner).poll_read(cx, buf) {
+                Poll::Ready(result) => match result {
+                    Ok(()) => Poll::Ready(Ok(())),
+                    Err(error) => Poll::Ready(Err!(error)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
     }
@@ -71,41 +50,32 @@ mod std_adapters {
             cx: &mut Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize>> {
-            match Pin::new(&mut self.inner).get_mut() {
-                None => { Poll::Ready(Err!(IoError::ReadNotConnected)) }
-                Some(socket) => match Pin::new(socket).poll_write(cx, buf) {
-                    Poll::Ready(result) => match result {
-                        Ok(size) => { Poll::Ready(Ok(size)) }
-                        Err(error) => { Poll::Ready(Err!(error)) }
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+            match Pin::new(&mut self.inner).poll_write(cx, buf) {
+                Poll::Ready(result) => match result {
+                    Ok(size) => Poll::Ready(Ok(size)),
+                    Err(error) => Poll::Ready(Err!(error)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
 
         fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-            match Pin::new(&mut self.inner).get_mut() {
-                None => { Poll::Ready(Err!(IoError::ReadNotConnected)) }
-                Some(socket) => match Pin::new(socket).poll_flush(cx) {
-                    Poll::Ready(result) => match result {
-                        Ok(()) => { Poll::Ready(Ok(())) }
-                        Err(error) => { Poll::Ready(Err!(error)) }
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+            match Pin::new(&mut self.inner).poll_flush(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(()) => Poll::Ready(Ok(())),
+                    Err(error) => Poll::Ready(Err!(error)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
 
         fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-            match Pin::new(&mut self.inner).get_mut() {
-                None => { Poll::Ready(Err!(IoError::ReadNotConnected)) }
-                Some(socket) => match Pin::new(socket).poll_shutdown(cx) {
-                    Poll::Ready(result) => match result {
-                        Ok(()) => { Poll::Ready(Ok(())) }
-                        Err(error) => { Poll::Ready(Err!(error)) }
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
+            match Pin::new(&mut self.inner).poll_shutdown(cx) {
+                Poll::Ready(result) => match result {
+                    Ok(()) => Poll::Ready(Ok(())),
+                    Err(error) => Poll::Ready(Err!(error)),
+                },
+                Poll::Pending => Poll::Pending,
             }
         }
     }
@@ -148,8 +118,3 @@ mod std_adapters {
 //         }
 //     }
 // }
-
-pub trait AdapterConnect<'a> {
-    /// Defines and connects the `inner` of an adapter to the host
-    async fn connect(&mut self, ip: Cow<'a, str>) -> Result<()>;
-}
