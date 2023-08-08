@@ -56,6 +56,7 @@ pub enum IoError {
     Io(embedded_io::ErrorKind),
 
     // Tls errors during IO
+    #[cfg(feature = "tls")]
     #[error("TLS: {0:?}")]
     TlsRead(embedded_tls::TlsError),
 }

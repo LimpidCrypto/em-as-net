@@ -1,6 +1,7 @@
+use crate::common::connect_to_embedded_websocket_tokio_ws_echo;
 use crate::common::{
-    codec::Codec, connect_to_embedded_websocket_tokio_ws_echo, connect_to_tungstenite_wss_echo,
-    connect_to_ws_tungstenite_echo, ECHO_WS_AS_IP_SERVER,
+    codec::Codec, connect_to_tungstenite_wss_echo, connect_to_ws_tungstenite_echo,
+    ECHO_WS_AS_IP_SERVER,
 };
 
 use em_as_net::client::websocket::{Message, ReadResult, WebsocketOptions};

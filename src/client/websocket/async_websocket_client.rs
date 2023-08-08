@@ -1,3 +1,5 @@
+use crate::{client::websocket::errors::WebsocketError, Err};
+
 use anyhow::Result;
 use core::{
     fmt::{Debug, Display},
@@ -9,9 +11,12 @@ use core::{
 use embedded_websocket::{framer_async::Framer, Client, WebSocketClient};
 use futures::{Sink, Stream};
 use rand_core::RngCore;
-use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 use url::Url;
+
+#[cfg(feature = "std")]
+use tokio::net::TcpStream;
+#[cfg(feature = "std")]
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 // Exports
 pub use embedded_websocket::{
@@ -19,8 +24,6 @@ pub use embedded_websocket::{
     WebSocketOptions as WebsocketOptions, WebSocketSendMessageType as WebsocketSendMessageType,
     WebSocketState as WebsocketState,
 };
-
-use crate::{client::websocket::errors::WebsocketError, Err};
 
 #[cfg(feature = "std")]
 pub type AsyncWebsocketClientTungstenite<Status> =
@@ -227,6 +230,21 @@ where
             Some(Ok(read_result)) => Some(Ok(read_result)),
             Some(Err(error)) => Some(Err!(WebsocketError::from(error))),
             None => None,
+        }
+    }
+
+    pub async fn try_next<'a, B: Deref<Target = [u8]>, E>(
+        &'a mut self,
+        stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
+        buffer: &'a mut [u8],
+    ) -> Result<Option<ReadResult<'_>>>
+    where
+        E: Debug,
+    {
+        match self.inner.read(stream, buffer).await {
+            Some(Ok(read_result)) => Ok(Some(read_result)),
+            Some(Err(error)) => Err!(WebsocketError::from(error)),
+            None => Ok(None),
         }
     }
 }
