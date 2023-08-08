@@ -3,8 +3,8 @@ mod constants;
 
 pub use constants::*;
 use em_as_net::client::websocket::{
-    AsyncWebsocketClientEmbeddedWebsocketTokio, AsyncWebsocketClientTungstenite, WebsocketOpen,
-    WebsocketOptions,
+    AsyncWebsocketClientEmbeddedWebsocketTokio, AsyncWebsocketClientTungstenite,
+    EmbeddedWebsocketOptions, WebsocketOpen,
 };
 use rand::{rngs::ThreadRng, thread_rng};
 use tokio::net::TcpStream;
@@ -33,7 +33,7 @@ pub async fn connect_to_tungstenite_wss_echo<'a>() -> AsyncWebsocketClientTungst
 pub async fn connect_to_embedded_websocket_tokio_ws_echo<'a>(
     stream: &'a mut Framed<TcpStream, codec::Codec>,
     buffer: &'a mut [u8],
-    websocket_options: &'a WebsocketOptions<'a>,
+    websocket_options: &'a EmbeddedWebsocketOptions<'a>,
 ) -> AsyncWebsocketClientEmbeddedWebsocketTokio<ThreadRng, WebsocketOpen> {
     let rng = thread_rng();
 

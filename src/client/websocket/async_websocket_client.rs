@@ -8,7 +8,10 @@ use core::{
     pin::Pin,
     task::Poll,
 };
-use embedded_websocket::{framer_async::Framer, Client, WebSocketClient};
+use embedded_websocket::{
+    framer_async::Framer as EmbeddedWebsocketFramer, Client as EmbeddedWebsocketClient,
+    WebSocket as EmbeddedWebsocket,
+};
 use futures::{Sink, Stream};
 use rand_core::RngCore;
 use url::Url;
@@ -16,22 +19,29 @@ use url::Url;
 #[cfg(feature = "std")]
 use tokio::net::TcpStream;
 #[cfg(feature = "std")]
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    connect_async as tungstenite_connect_async, MaybeTlsStream as TungsteniteMaybeTlsStream,
+    WebSocketStream as TungsteniteWebsocketStream,
+};
 
 // Exports
 pub use embedded_websocket::{
-    framer_async::ReadResult, WebSocketCloseStatusCode as WebsocketCloseStatusCode,
-    WebSocketOptions as WebsocketOptions, WebSocketSendMessageType as WebsocketSendMessageType,
-    WebSocketState as WebsocketState,
+    framer_async::{
+        FramerError as EmbeddedWebsocketFramerError, ReadResult as EmbeddedWebsocketReadMessageType,
+    },
+    Error as EmbeddedWebsocketError, WebSocketCloseStatusCode as EmbeddedWebsocketCloseStatusCode,
+    WebSocketOptions as EmbeddedWebsocketOptions,
+    WebSocketSendMessageType as EmbeddedWebsocketSendMessageType,
+    WebSocketState as EmbeddedWebsocketState,
 };
 
 #[cfg(feature = "std")]
 pub type AsyncWebsocketClientTungstenite<Status> =
-    AsyncWebsocketClient<WebSocketStream<MaybeTlsStream<TcpStream>>, Status>;
+    AsyncWebsocketClient<TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>, Status>;
 pub type AsyncWebsocketClientEmbeddedWebsocketTokio<Rng, Status> =
-    AsyncWebsocketClient<Framer<Rng, Client>, Status>;
+    AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, Status>;
 #[cfg(feature = "std")]
-pub use tokio_tungstenite::tungstenite::Message;
+pub use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
 pub struct WebsocketOpen;
 pub struct WebsocketClosed;
@@ -117,12 +127,21 @@ where
 }
 
 #[cfg(feature = "std")]
-impl AsyncWebsocketClient<WebSocketStream<MaybeTlsStream<TcpStream>>, WebsocketClosed> {
+impl
+    AsyncWebsocketClient<
+        TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
+        WebsocketClosed,
+    >
+{
     pub async fn open(
         uri: Url,
-    ) -> Result<AsyncWebsocketClient<WebSocketStream<MaybeTlsStream<TcpStream>>, WebsocketOpen>>
-    {
-        let (websocket_stream, _) = connect_async(uri).await.unwrap();
+    ) -> Result<
+        AsyncWebsocketClient<
+            TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
+            WebsocketOpen,
+        >,
+    > {
+        let (websocket_stream, _) = tungstenite_connect_async(uri).await.unwrap();
 
         Ok(AsyncWebsocketClient {
             inner: websocket_stream,
@@ -131,7 +150,8 @@ impl AsyncWebsocketClient<WebSocketStream<MaybeTlsStream<TcpStream>>, WebsocketC
     }
 }
 
-impl<Rng> AsyncWebsocketClient<Framer<Rng, Client>, WebsocketClosed>
+impl<Rng>
+    AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketClosed>
 where
     Rng: RngCore,
 {
@@ -139,14 +159,16 @@ where
         stream: &mut (impl Stream<Item = Result<B, E>> + for<'a> Sink<&'a [u8], Error = E> + Unpin),
         buffer: &mut [u8],
         rng: Rng,
-        websocket_options: &WebsocketOptions<'_>,
-    ) -> Result<AsyncWebsocketClient<Framer<Rng, Client>, WebsocketOpen>>
+        websocket_options: &EmbeddedWebsocketOptions<'_>,
+    ) -> Result<
+        AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketOpen>,
+    >
     where
         B: AsRef<[u8]>,
         E: Debug,
     {
-        let websocket = WebSocketClient::new_client(rng);
-        let mut framer = Framer::new(websocket);
+        let websocket = EmbeddedWebsocket::<Rng, EmbeddedWebsocketClient>::new_client(rng);
+        let mut framer = EmbeddedWebsocketFramer::new(websocket);
         framer
             .connect(stream, buffer, websocket_options)
             .await
@@ -159,13 +181,13 @@ where
     }
 }
 
-impl<Rng> AsyncWebsocketClient<Framer<Rng, Client>, WebsocketOpen>
+impl<Rng> AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketOpen>
 where
     Rng: RngCore,
 {
     pub fn encode<E>(
         &mut self,
-        message_type: WebsocketSendMessageType,
+        message_type: EmbeddedWebsocketSendMessageType,
         end_of_message: bool,
         from: &[u8],
         to: &mut [u8],
@@ -185,7 +207,7 @@ where
         &mut self,
         stream: &mut (impl Sink<&'b [u8], Error = E> + Unpin),
         stream_buf: &'b mut [u8],
-        message_type: WebsocketSendMessageType,
+        message_type: EmbeddedWebsocketSendMessageType,
         end_of_message: bool,
         frame_buf: &'b [u8],
     ) -> Result<()>
@@ -204,7 +226,7 @@ where
         &mut self,
         stream: &mut (impl Sink<&'b [u8], Error = E> + Unpin),
         stream_buf: &'b mut [u8],
-        close_status: WebsocketCloseStatusCode,
+        close_status: EmbeddedWebsocketCloseStatusCode,
         status_description: Option<&str>,
     ) -> Result<()>
     where
@@ -222,7 +244,7 @@ where
         &'a mut self,
         stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
         buffer: &'a mut [u8],
-    ) -> Option<Result<ReadResult<'_>>>
+    ) -> Option<Result<EmbeddedWebsocketReadMessageType<'_>>>
     where
         E: Debug,
     {
@@ -237,7 +259,7 @@ where
         &'a mut self,
         stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
         buffer: &'a mut [u8],
-    ) -> Result<Option<ReadResult<'_>>>
+    ) -> Result<Option<EmbeddedWebsocketReadMessageType<'_>>>
     where
         E: Debug,
     {

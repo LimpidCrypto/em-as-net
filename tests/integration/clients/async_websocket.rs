@@ -4,7 +4,10 @@ use crate::common::{
     ECHO_WS_AS_IP_SERVER,
 };
 
-use em_as_net::client::websocket::{Message, ReadResult, WebsocketOptions};
+use em_as_net::client::websocket::{
+    EmbeddedWebsocketOptions, EmbeddedWebsocketReadMessageType, EmbeddedWebsocketSendMessageType,
+    TungsteniteMessage,
+};
 use futures::{SinkExt, TryStreamExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
@@ -13,14 +16,14 @@ use tokio_util::codec::Framed;
 async fn test_websocket_non_tls() {
     let mut websocket = connect_to_ws_tungstenite_echo().await;
     websocket
-        .send(Message::Text("Hello World".to_string()))
+        .send(TungsteniteMessage::Text("Hello World".to_string()))
         .await
         .unwrap();
 
     loop {
         let message = websocket.try_next().await.unwrap().unwrap();
         match message {
-            Message::Text(text) => {
+            TungsteniteMessage::Text(text) => {
                 assert_eq!("Hello World".to_string(), text)
             }
             _ => panic!("Expected 'Hello World' as text message."),
@@ -33,14 +36,14 @@ async fn test_websocket_non_tls() {
 async fn test_websocket_tls() {
     let mut websocket = connect_to_tungstenite_wss_echo().await;
     websocket
-        .send(Message::Text("Hello World".to_string()))
+        .send(TungsteniteMessage::Text("Hello World".to_string()))
         .await
         .unwrap();
 
     loop {
         let message = websocket.try_next().await.unwrap().unwrap();
         match message {
-            Message::Text(text) => {
+            TungsteniteMessage::Text(text) => {
                 assert_eq!("Hello World".to_string(), text)
             }
             _ => panic!("Expected 'Hello World' as text message."),
@@ -54,7 +57,7 @@ async fn test_websocket_embedded_ws_tokio() {
     let stream = TcpStream::connect(ECHO_WS_AS_IP_SERVER).await.unwrap();
     let mut framed = Framed::new(stream, Codec::new());
     let mut buffer = [0u8; 4096];
-    let websocket_options = WebsocketOptions {
+    let websocket_options = EmbeddedWebsocketOptions {
         path: "/mirror",
         host: "ws.vi-server.org",
         origin: "http://ws.vi-server.org:80",
@@ -68,7 +71,7 @@ async fn test_websocket_embedded_ws_tokio() {
         .send(
             &mut framed,
             &mut buffer,
-            embedded_websocket::WebSocketSendMessageType::Binary,
+            EmbeddedWebsocketSendMessageType::Binary,
             false,
             b"Hello World",
         )
@@ -82,16 +85,16 @@ async fn test_websocket_embedded_ws_tokio() {
             .unwrap()
             .unwrap();
         match message {
-            ReadResult::Text(text) => {
+            EmbeddedWebsocketReadMessageType::Text(text) => {
                 println!("Text: {:?}", text)
             }
-            ReadResult::Binary(msg) => {
+            EmbeddedWebsocketReadMessageType::Binary(msg) => {
                 assert_eq!(b"Hello World", msg);
                 break;
             }
-            ReadResult::Pong(t) => println!("Pong: {:?}", t),
-            ReadResult::Ping(t) => println!("Ping: {:?}", t),
-            ReadResult::Close(_) => println!("Close:"),
+            EmbeddedWebsocketReadMessageType::Pong(t) => println!("Pong: {:?}", t),
+            EmbeddedWebsocketReadMessageType::Ping(t) => println!("Ping: {:?}", t),
+            EmbeddedWebsocketReadMessageType::Close(_) => println!("Close:"),
         }
     }
 }

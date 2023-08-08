@@ -1,13 +1,12 @@
+use super::async_websocket_client::EmbeddedWebsocketFramerError;
 use core::fmt::Debug;
 use core::str::Utf8Error;
-use embedded_websocket::framer_async::FramerError;
 use thiserror_no_std::Error;
 
 #[derive(Debug, PartialEq, Eq, Error)]
 pub enum WebsocketError<E: Debug> {
     #[error("Stream is not connected.")]
     NotConnected,
-
     // FramerError
     #[error("I/O error: {0:?}")]
     Io(E),
@@ -25,16 +24,18 @@ pub enum WebsocketError<E: Debug> {
     RxBufferTooSmall(usize),
 }
 
-impl<E: Debug> From<FramerError<E>> for WebsocketError<E> {
-    fn from(value: FramerError<E>) -> Self {
+impl<E: Debug> From<EmbeddedWebsocketFramerError<E>> for WebsocketError<E> {
+    fn from(value: EmbeddedWebsocketFramerError<E>) -> Self {
         match value {
-            FramerError::Io(e) => WebsocketError::Io(e),
-            FramerError::FrameTooLarge(e) => WebsocketError::FrameTooLarge(e),
-            FramerError::Utf8(e) => WebsocketError::Utf8(e),
-            FramerError::HttpHeader(_) => WebsocketError::HttpHeader,
-            FramerError::WebSocket(e) => WebsocketError::WebSocket(e),
-            FramerError::Disconnected => WebsocketError::Disconnected,
-            FramerError::RxBufferTooSmall(e) => WebsocketError::RxBufferTooSmall(e),
+            EmbeddedWebsocketFramerError::Io(e) => WebsocketError::Io(e),
+            EmbeddedWebsocketFramerError::FrameTooLarge(e) => WebsocketError::FrameTooLarge(e),
+            EmbeddedWebsocketFramerError::Utf8(e) => WebsocketError::Utf8(e),
+            EmbeddedWebsocketFramerError::HttpHeader(_) => WebsocketError::HttpHeader,
+            EmbeddedWebsocketFramerError::WebSocket(e) => WebsocketError::WebSocket(e),
+            EmbeddedWebsocketFramerError::Disconnected => WebsocketError::Disconnected,
+            EmbeddedWebsocketFramerError::RxBufferTooSmall(e) => {
+                WebsocketError::RxBufferTooSmall(e)
+            }
         }
     }
 }
