@@ -1,146 +1,103 @@
-pub mod errors;
+mod exceptions;
 
-use alloc::boxed::Box;
+use embedded_io_adapters::tokio_1::FromTokio;
+pub use exceptions::*;
+use tokio_rustls::client::TlsStream;
+
 use anyhow::Result;
-use core::future::Future;
-use core::net::SocketAddr;
-use core::pin::Pin;
-use core::task::{Context, Poll};
-
-use embedded_io::asynch::{Read, Write};
-use embedded_tls::{TlsCipherSuite, TlsConnection, TlsContext, TlsVerifier};
-use rand_core::{CryptoRng, RngCore};
+use embedded_io_async::{Read, Write};
 
 #[cfg(not(feature = "std"))]
-use crate::core::io::ReadBuf;
+use rustls::{ClientConnection, ServerConnection};
 #[cfg(feature = "std")]
-use tokio::io::ReadBuf;
+use tokio_rustls::TlsConnector;
 
-use crate::core::framed::IoError;
-use crate::core::io;
-use crate::core::tcp::TcpConnect;
-use errors::TlsError;
+#[cfg(not(feature = "std"))]
+pub struct TlsSocketClient(ClientConnection);
+#[cfg(not(feature = "std"))]
+pub struct TlsSocketServer(ServerConnection);
 
-use crate::Err;
+#[cfg(feature = "std")]
+pub struct TlsSocket<S>(FromTokio<TlsStream<S>>);
 
-// exports
-pub use embedded_tls::{
-    blocking::{Aes128GcmSha256, Aes256GcmSha384},
-    webpki::CertVerifier,
-    NoVerify, TlsConfig,
-};
+#[cfg(feature = "std")]
+mod tokio_tls_client {
+    use alloc::sync::Arc;
+    use embedded_io_async::ErrorType;
+    use rustls::{pki_types::ServerName, ClientConfig, RootCertStore};
+    use tokio::io::{AsyncRead, AsyncWrite};
+    use url::Url;
 
-#[derive(Default)]
-pub struct TlsSocket<'a, Socket, Cipher>
-where
-    Socket: Read + Write + 'a,
-    Cipher: TlsCipherSuite + 'static,
-{
-    // TODO: This is just optional so that the `shutdown` works.
-    // TODO: `Option` should be required when I found an elegant solution to `shutdown` the TLS connection
-    inner: Option<TlsConnection<'a, Socket, Cipher>>,
-}
+    use crate::core::tcp::TcpStream;
 
-impl<'a, Socket, Cipher> TlsSocket<'a, Socket, Cipher>
-where
-    Socket: Read + Write + TcpConnect + 'a,
-    Cipher: TlsCipherSuite + 'static,
-{
-    pub async fn connect<Rng: CryptoRng + RngCore, Verifier: TlsVerifier<'a, Cipher>>(
-        mut socket: Socket,
-        record_read_buf: &'a mut [u8],
-        record_write_buf: &'a mut [u8],
-        rng: &'a mut Rng,
-        config: &'a TlsConfig<'a, Cipher>,
-        socket_addr: SocketAddr,
-    ) -> Result<Self> {
-        socket.connect(socket_addr).await?;
-        let mut tls_connection = TlsConnection::new(socket, record_read_buf, record_write_buf);
-        if let Err(err) = tls_connection
-            .open::<Rng, Verifier>(TlsContext::new(config, rng))
-            .await
-        {
-            return Err!(TlsError::Other(err));
-        }
+    use super::*;
 
-        Ok(Self {
-            inner: Some(tls_connection),
-        })
-    }
-}
+    impl<S> TlsSocket<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        pub async fn connect<'a>(url: Url) -> Result<TlsSocket<S>> {
+            let stream = TcpStream::new(inner)
+            let mut root_cert_store = RootCertStore::empty();
+            root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            let config = ClientConfig::builder()
+                .with_root_certificates(root_cert_store)
+                .with_no_client_auth();
+            let connector = TlsConnector::from(Arc::new(config));
 
-impl<'a, Socket, Cipher> io::AsyncRead for TlsSocket<'a, Socket, Cipher>
-where
-    Socket: Read + Write + Unpin + 'a,
-    Cipher: TlsCipherSuite + Unpin + 'static,
-    <Cipher as TlsCipherSuite>::Hash: Unpin,
-    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::OutputSizeUser>::OutputSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
-    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::BlockSizeUser>::BlockSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
-{
-    type Error = IoError;
+            let stream = connector
+                .connect(server_name, stream)
+                .await
+                .map_err(|e| TlsException::IoError(e).into())?;
 
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
-        match self.inner.as_mut() {
-            None => { Poll::Ready(Err(IoError::ReadNotConnected)) }
-            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.read(buf.filled_mut()))).poll(cx) {
-                Poll::Ready(result) => match result {
-                    Ok(0) => {
-                        // no data ready
-                        Poll::Pending
-                    }
-                    Ok(_) => Poll::Ready(Ok(())),
-                    Err(e) => Poll::Ready(Err(IoError::TlsRead(e))),
-                },
-                Poll::Pending => Poll::Pending,
-            }
-        }
-    }
-}
-
-impl<'a, Socket, Cipher> io::AsyncWrite for TlsSocket<'a, Socket, Cipher>
-where
-    Socket: Read + Write + Unpin + 'a,
-    Cipher: TlsCipherSuite + Unpin + 'static,
-    <Cipher as TlsCipherSuite>::Hash: Unpin,
-    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::OutputSizeUser>::OutputSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
-    <<<Cipher as TlsCipherSuite>::Hash as crypto_common::BlockSizeUser>::BlockSize as generic_array::ArrayLength<u8>>::ArrayType: Unpin,
-{
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize>> {
-        match self.inner.as_mut() {
-            None => { Poll::Ready(Err!(IoError::WriteNotConnected)) }
-            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.write(buf))).poll(cx) {
-                Poll::Ready(result) => match result {
-                    Ok(size) => Poll::Ready(Ok(size)),
-                    Err(_) => Poll::Ready(Err!(IoError::UnableToWrite)),
-                },
-                Poll::Pending => Poll::Pending,
-            }
-        }
-
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
-        match self.inner.as_mut() {
-            None => { Poll::Ready(Err!(IoError::WriteNotConnected)) }
-            Some(tls_connection) => match Pin::new(&mut Box::pin(tls_connection.flush())).poll(cx) {
-                Poll::Ready(result) => match result {
-                    Ok(_) => Poll::Ready(Ok(())),
-                    Err(_) => Poll::Ready(Err!(IoError::UnableToFlush)),
-                },
-                Poll::Pending => Poll::Pending,
-            }
+            Ok(TlsSocket(FromTokio::new(stream)))
         }
     }
 
-    fn poll_shutdown(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<()>> {
-        let tls_connection = core::mem::take(&mut self.inner).unwrap();
+    impl<S> TlsSocket<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        pub async fn accept(stream: S, url: &Url) -> Result<Self> {
+            todo!("Implement accept as TlsListener");
+        }
+    }
 
-        // TODO: Find an elegant solution
-        let _ = tls_connection.close();
-        Poll::Ready(Ok(()))
+    impl<S> ErrorType for TlsSocket<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        type Error = TlsException;
+    }
+
+    impl<S> Read for TlsSocket<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        async fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize, Self::Error> {
+            self.0
+                .read(buf)
+                .await
+                .map_err(|e| TlsException::IoError(e).into())
+        }
+    }
+
+    impl<S> Write for TlsSocket<S>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        async fn write(&mut self, buf: &[u8]) -> core::result::Result<usize, Self::Error> {
+            self.0
+                .write(buf)
+                .await
+                .map_err(|e| TlsException::IoError(e).into())
+        }
+
+        async fn flush(&mut self) -> core::result::Result<(), Self::Error> {
+            self.0
+                .flush()
+                .await
+                .map_err(|e| TlsException::IoError(e).into())
+        }
     }
 }

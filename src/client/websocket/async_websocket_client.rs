@@ -1,5 +1,6 @@
 use crate::{client::websocket::errors::WebsocketError, Err};
 
+use alloc::string::ToString;
 use anyhow::Result;
 use core::{
     fmt::{Debug, Display},
@@ -141,7 +142,7 @@ impl
             WebsocketOpen,
         >,
     > {
-        let (websocket_stream, _) = tungstenite_connect_async(uri).await.unwrap();
+        let (websocket_stream, _) = tungstenite_connect_async(uri.to_string()).await.unwrap();
 
         Ok(AsyncWebsocketClient {
             inner: websocket_stream,

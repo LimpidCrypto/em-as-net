@@ -25,9 +25,9 @@ pin_project! {
     pub(crate) struct FramedImpl<T, C, State>
     {
         #[pin]
-        pub(crate) inner: T,
+        pub inner: T,
         pub(crate) state: State,
-        pub(crate) codec: C,
+        pub codec: C,
     }
 }
 

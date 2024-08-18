@@ -1,14 +1,15 @@
 mod queries;
 
-use crate::core::dns::queries::{Aaaa, Lookup, A};
-use alloc::borrow::Cow;
+pub use queries::DnsError;
+use queries::{Aaaa, Lookup, A};
+
 use anyhow::Result;
 use core::marker::PhantomData;
 use embedded_nal_async::{IpAddr, Ipv4Addr, Ipv6Addr};
-pub use queries::DnsError;
+use url::Url;
 
 /// Tries to look up IPv6 addresses first. If it fails it then tries to look up IPv4 addresses.
-pub async fn lookup(url: Cow<'_, str>) -> Result<IpAddr> {
+pub async fn lookup(url: Url) -> Result<IpAddr> {
     let dns_a = Dns::<A>::new(url.clone());
     let dns_aaaa = Dns::<Aaaa>::new(url);
 
@@ -18,13 +19,13 @@ pub async fn lookup(url: Cow<'_, str>) -> Result<IpAddr> {
     }
 }
 
-pub struct Dns<'a, T = Aaaa> {
-    url: Cow<'a, str>,
+pub struct Dns<T = Aaaa> {
+    url: Url,
     record_type: PhantomData<T>,
 }
 
-impl<'a, T> Dns<'a, T> {
-    pub fn new(url: Cow<'a, str>) -> Self {
+impl<T> Dns<T> {
+    pub fn new(url: Url) -> Self {
         Self {
             url,
             record_type: PhantomData,
@@ -32,14 +33,14 @@ impl<'a, T> Dns<'a, T> {
     }
 }
 
-impl<'a> Dns<'a, A> {
+impl Dns<A> {
     pub async fn lookup(&self) -> Result<Ipv4Addr> {
-        A::lookup(self.url.clone()).await
+        A::lookup(&self.url).await
     }
 }
 
-impl<'a> Dns<'a, Aaaa> {
+impl Dns<Aaaa> {
     pub async fn lookup(&self) -> Result<Ipv6Addr> {
-        Aaaa::lookup(self.url.clone()).await
+        Aaaa::lookup(&self.url).await
     }
 }

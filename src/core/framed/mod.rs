@@ -8,7 +8,6 @@ mod framed_impl;
 use framed_impl::{FramedImpl, RWFrames, ReadFrame, WriteFrame};
 
 pub mod errors;
-pub use errors::*;
 
 use bytes::BytesMut;
 use core::fmt;

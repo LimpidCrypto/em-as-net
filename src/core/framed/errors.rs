@@ -53,7 +53,7 @@ pub enum IoError {
 
     // embedded_io errors
     #[error("{0:?}")]
-    Io(embedded_io::ErrorKind),
+    Io(embedded_io_async::ErrorKind),
 
     // Tls errors during IO
     #[cfg(feature = "tls")]
@@ -61,11 +61,11 @@ pub enum IoError {
     TlsRead(embedded_tls::TlsError),
 }
 
-impl embedded_io::Error for IoError {
-    fn kind(&self) -> embedded_io::ErrorKind {
+impl embedded_io_async::Error for IoError {
+    fn kind(&self) -> embedded_io_async::ErrorKind {
         match self {
             Self::Io(k) => *k,
-            _ => embedded_io::ErrorKind::Other,
+            _ => embedded_io_async::ErrorKind::Other,
         }
     }
 }
