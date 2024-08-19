@@ -1,46 +1,21 @@
-pub mod codec;
 mod constants;
 
 pub use constants::*;
-use em_as_net::client::websocket::{
-    AsyncWebsocketClientEmbeddedWebsocketTokio, AsyncWebsocketClientTungstenite,
-    EmbeddedWebsocketOptions, WebsocketOpen,
-};
+use em_as_net::client::websocket::{AsyncWebSocketClient, WebSocketOpen};
+use embedded_io_async::{Read, Write};
 use rand::{rngs::ThreadRng, thread_rng};
-use tokio::net::TcpStream;
-use tokio_util::codec::Framed;
+use url::Url;
 
-pub async fn connect_to_ws_tungstenite_echo<'a>() -> AsyncWebsocketClientTungstenite<WebsocketOpen>
-{
-    let websocket = AsyncWebsocketClientTungstenite::open(ECHO_WS_SERVER.parse().unwrap())
-        .await
-        .unwrap();
-    assert!(websocket.is_open());
-
-    websocket
-}
-
-pub async fn connect_to_tungstenite_wss_echo<'a>() -> AsyncWebsocketClientTungstenite<WebsocketOpen>
-{
-    let websocket = AsyncWebsocketClientTungstenite::open(ECHO_WSS_SERVER.parse().unwrap())
-        .await
-        .unwrap();
-    assert!(websocket.is_open());
-
-    websocket
-}
-
-pub async fn connect_to_embedded_websocket_tokio_ws_echo<'a>(
-    stream: &'a mut Framed<TcpStream, codec::Codec>,
-    buffer: &'a mut [u8],
-    websocket_options: &'a EmbeddedWebsocketOptions<'a>,
-) -> AsyncWebsocketClientEmbeddedWebsocketTokio<ThreadRng, WebsocketOpen> {
+pub async fn connect_ws<S: Read + Write + Unpin>(
+    uri: &Url,
+    stream: &mut S,
+    buffer: &mut [u8],
+) -> AsyncWebSocketClient<ThreadRng, WebSocketOpen> {
     let rng = thread_rng();
 
-    let websocket =
-        AsyncWebsocketClientEmbeddedWebsocketTokio::open(stream, buffer, rng, websocket_options)
-            .await
-            .unwrap();
+    let websocket = AsyncWebSocketClient::open(stream, buffer, uri, rng, None, None)
+        .await
+        .unwrap();
 
     assert!(websocket.is_open());
 

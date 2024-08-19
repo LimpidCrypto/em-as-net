@@ -1,6 +1,6 @@
 mod queries;
 
-pub use queries::DnsError;
+pub use queries::DnsException;
 use queries::{Aaaa, Lookup, A};
 
 use anyhow::Result;

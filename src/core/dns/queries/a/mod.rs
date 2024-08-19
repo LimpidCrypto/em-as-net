@@ -10,7 +10,7 @@ mod impl_lookup {
     use core::net::SocketAddr;
 
     use super::*;
-    use crate::{core::dns::DnsError, Err};
+    use crate::{core::dns::DnsException, Err};
     use alloc::{string::ToString, vec::Vec};
     use tokio::net::lookup_host;
     use url::Url;
@@ -18,8 +18,8 @@ mod impl_lookup {
     impl Lookup<Ipv4Addr> for A {
         async fn lookup(url: &Url) -> Result<Ipv4Addr> {
             let url = url.to_string();
-            let addresses = match lookup_host(&*url).await {
-                Err(_) => return Err!(DnsError::LookupError(url.into())),
+            let addresses = match lookup_host(&url).await {
+                Err(_) => return Err!(DnsException::LookupError(url.clone().into())),
                 Ok(socket_addrs_iter) => socket_addrs_iter,
             };
             return match addresses
@@ -28,8 +28,8 @@ mod impl_lookup {
                 .first()
             {
                 Some(SocketAddr::V4(addrs)) => Ok(Ipv4Addr::from(addrs.ip().octets())),
-                None => Err!(DnsError::LookupIpv4Error(url.into())),
-                _ => Err!(DnsError::LookupIpv4Error(url.into())),
+                None => Err!(DnsException::LookupIpv4Error(url.into())),
+                _ => Err!(DnsException::LookupIpv4Error(url.into())),
             };
         }
     }

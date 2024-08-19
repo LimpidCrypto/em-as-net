@@ -1,4 +1,4 @@
-use crate::{client::websocket::errors::WebsocketError, Err};
+use crate::{client::websocket::errors::WebSocketError, Err};
 
 use alloc::string::ToString;
 use anyhow::Result;
@@ -10,8 +10,8 @@ use core::{
     task::Poll,
 };
 use embedded_websocket::{
-    framer_async::Framer as EmbeddedWebsocketFramer, Client as EmbeddedWebsocketClient,
-    WebSocket as EmbeddedWebsocket,
+    framer_async::Framer as EmbeddedWebSocketFramer, Client as EmbeddedWebSocketClient,
+    WebSocket as EmbeddedWebSocket,
 };
 use futures::{Sink, Stream};
 use rand_core::RngCore;
@@ -22,43 +22,43 @@ use tokio::net::TcpStream;
 #[cfg(feature = "std")]
 use tokio_tungstenite::{
     connect_async as tungstenite_connect_async, MaybeTlsStream as TungsteniteMaybeTlsStream,
-    WebSocketStream as TungsteniteWebsocketStream,
+    WebSocketStream as TungsteniteWebSocketStream,
 };
 
 // Exports
 pub use embedded_websocket::{
     framer_async::{
-        FramerError as EmbeddedWebsocketFramerError, ReadResult as EmbeddedWebsocketReadMessageType,
+        FramerError as EmbeddedWebSocketFramerError, ReadResult as EmbeddedWebSocketReadMessageType,
     },
-    Error as EmbeddedWebsocketError, WebSocketCloseStatusCode as EmbeddedWebsocketCloseStatusCode,
-    WebSocketOptions as EmbeddedWebsocketOptions,
-    WebSocketSendMessageType as EmbeddedWebsocketSendMessageType,
-    WebSocketState as EmbeddedWebsocketState,
+    Error as EmbeddedWebSocketError, WebSocketCloseStatusCode as EmbeddedWebSocketCloseStatusCode,
+    WebSocketOptions as EmbeddedWebSocketOptions,
+    WebSocketSendMessageType as EmbeddedWebSocketSendMessageType,
+    WebSocketState as EmbeddedWebSocketState,
 };
 
 #[cfg(feature = "std")]
-pub type AsyncWebsocketClientTungstenite<Status> =
-    AsyncWebsocketClient<TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>, Status>;
-pub type AsyncWebsocketClientEmbeddedWebsocketTokio<Rng, Status> =
-    AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, Status>;
+pub type AsyncWebSocketClientTungstenite<Status> =
+    AsyncWebSocketClient<TungsteniteWebSocketStream<TungsteniteMaybeTlsStream<TcpStream>>, Status>;
+pub type AsyncWebSocketClientEmbeddedWebSocketTokio<Rng, Status> =
+    AsyncWebSocketClient<EmbeddedWebSocketFramer<Rng, EmbeddedWebSocketClient>, Status>;
 #[cfg(feature = "std")]
 pub use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
-pub struct WebsocketOpen;
-pub struct WebsocketClosed;
+pub struct WebSocketOpen;
+pub struct WebSocketClosed;
 
-pub struct AsyncWebsocketClient<T, Status = WebsocketClosed> {
+pub struct AsyncWebSocketClient<T, Status = WebSocketClosed> {
     inner: T,
     status: PhantomData<Status>,
 }
 
-impl<T, Status> AsyncWebsocketClient<T, Status> {
+impl<T, Status> AsyncWebSocketClient<T, Status> {
     pub fn is_open(&self) -> bool {
-        core::any::type_name::<Status>() == core::any::type_name::<WebsocketOpen>()
+        core::any::type_name::<Status>() == core::any::type_name::<WebSocketOpen>()
     }
 }
 
-impl<T, I> Sink<I> for AsyncWebsocketClient<T, WebsocketOpen>
+impl<T, I> Sink<I> for AsyncWebSocketClient<T, WebSocketOpen>
 where
     T: Sink<I> + Unpin,
     <T as Sink<I>>::Error: Display,
@@ -109,7 +109,7 @@ where
     }
 }
 
-impl<T> Stream for AsyncWebsocketClient<T, WebsocketOpen>
+impl<T> Stream for AsyncWebSocketClient<T, WebSocketOpen>
 where
     T: Stream + Unpin,
 {
@@ -129,30 +129,30 @@ where
 
 #[cfg(feature = "std")]
 impl
-    AsyncWebsocketClient<
-        TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
-        WebsocketClosed,
+    AsyncWebSocketClient<
+        TungsteniteWebSocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
+        WebSocketClosed,
     >
 {
     pub async fn open(
         uri: Url,
     ) -> Result<
-        AsyncWebsocketClient<
-            TungsteniteWebsocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
-            WebsocketOpen,
+        AsyncWebSocketClient<
+            TungsteniteWebSocketStream<TungsteniteMaybeTlsStream<TcpStream>>,
+            WebSocketOpen,
         >,
     > {
         let (websocket_stream, _) = tungstenite_connect_async(uri.to_string()).await.unwrap();
 
-        Ok(AsyncWebsocketClient {
+        Ok(AsyncWebSocketClient {
             inner: websocket_stream,
-            status: PhantomData::<WebsocketOpen>,
+            status: PhantomData::<WebSocketOpen>,
         })
     }
 }
 
 impl<Rng>
-    AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketClosed>
+    AsyncWebSocketClient<EmbeddedWebSocketFramer<Rng, EmbeddedWebSocketClient>, WebSocketClosed>
 where
     Rng: RngCore,
 {
@@ -160,35 +160,35 @@ where
         stream: &mut (impl Stream<Item = Result<B, E>> + for<'a> Sink<&'a [u8], Error = E> + Unpin),
         buffer: &mut [u8],
         rng: Rng,
-        websocket_options: &EmbeddedWebsocketOptions<'_>,
+        websocket_options: &EmbeddedWebSocketOptions<'_>,
     ) -> Result<
-        AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketOpen>,
+        AsyncWebSocketClient<EmbeddedWebSocketFramer<Rng, EmbeddedWebSocketClient>, WebSocketOpen>,
     >
     where
         B: AsRef<[u8]>,
         E: Debug,
     {
-        let websocket = EmbeddedWebsocket::<Rng, EmbeddedWebsocketClient>::new_client(rng);
-        let mut framer = EmbeddedWebsocketFramer::new(websocket);
+        let websocket = EmbeddedWebSocket::<Rng, EmbeddedWebSocketClient>::new_client(rng);
+        let mut framer = EmbeddedWebSocketFramer::new(websocket);
         framer
             .connect(stream, buffer, websocket_options)
             .await
             .unwrap();
 
-        Ok(AsyncWebsocketClient {
+        Ok(AsyncWebSocketClient {
             inner: framer,
-            status: PhantomData::<WebsocketOpen>,
+            status: PhantomData::<WebSocketOpen>,
         })
     }
 }
 
-impl<Rng> AsyncWebsocketClient<EmbeddedWebsocketFramer<Rng, EmbeddedWebsocketClient>, WebsocketOpen>
+impl<Rng> AsyncWebSocketClient<EmbeddedWebSocketFramer<Rng, EmbeddedWebSocketClient>, WebSocketOpen>
 where
     Rng: RngCore,
 {
     pub fn encode<E>(
         &mut self,
-        message_type: EmbeddedWebsocketSendMessageType,
+        message_type: EmbeddedWebSocketSendMessageType,
         end_of_message: bool,
         from: &[u8],
         to: &mut [u8],
@@ -208,7 +208,7 @@ where
         &mut self,
         stream: &mut (impl Sink<&'b [u8], Error = E> + Unpin),
         stream_buf: &'b mut [u8],
-        message_type: EmbeddedWebsocketSendMessageType,
+        message_type: EmbeddedWebSocketSendMessageType,
         end_of_message: bool,
         frame_buf: &'b [u8],
     ) -> Result<()>
@@ -227,7 +227,7 @@ where
         &mut self,
         stream: &mut (impl Sink<&'b [u8], Error = E> + Unpin),
         stream_buf: &'b mut [u8],
-        close_status: EmbeddedWebsocketCloseStatusCode,
+        close_status: EmbeddedWebSocketCloseStatusCode,
         status_description: Option<&str>,
     ) -> Result<()>
     where
@@ -245,13 +245,13 @@ where
         &'a mut self,
         stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
         buffer: &'a mut [u8],
-    ) -> Option<Result<EmbeddedWebsocketReadMessageType<'_>>>
+    ) -> Option<Result<EmbeddedWebSocketReadMessageType<'_>>>
     where
         E: Debug,
     {
         match self.inner.read(stream, buffer).await {
             Some(Ok(read_result)) => Some(Ok(read_result)),
-            Some(Err(error)) => Some(Err!(WebsocketError::from(error))),
+            Some(Err(error)) => Some(Err!(WebSocketError::from(error))),
             None => None,
         }
     }
@@ -260,13 +260,13 @@ where
         &'a mut self,
         stream: &mut (impl Stream<Item = Result<B, E>> + Sink<&'a [u8], Error = E> + Unpin),
         buffer: &'a mut [u8],
-    ) -> Result<Option<EmbeddedWebsocketReadMessageType<'_>>>
+    ) -> Result<Option<EmbeddedWebSocketReadMessageType<'_>>>
     where
         E: Debug,
     {
         match self.inner.read(stream, buffer).await {
             Some(Ok(read_result)) => Ok(Some(read_result)),
-            Some(Err(error)) => Err!(WebsocketError::from(error)),
+            Some(Err(error)) => Err!(WebSocketError::from(error)),
             None => Ok(None),
         }
     }

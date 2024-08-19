@@ -15,3 +15,5 @@ pub mod core;
 pub mod utils;
 
 mod _anyhow;
+
+pub use url::Url;

@@ -10,7 +10,7 @@ mod impl_lookup {
 
     use super::*;
     use crate::core::dns::queries::Lookup;
-    use crate::core::dns::DnsError;
+    use crate::core::dns::DnsException;
     use crate::Err;
     use alloc::string::ToString;
     use alloc::vec::Vec;
@@ -20,8 +20,8 @@ mod impl_lookup {
     impl Lookup<Ipv6Addr> for Aaaa {
         async fn lookup(url: &Url) -> Result<Ipv6Addr> {
             let url = url.to_string();
-            let addresses = match lookup_host(&*url).await {
-                Err(_) => return Err!(DnsError::LookupError(url.into())),
+            let addresses = match lookup_host(&url).await {
+                Err(_) => return Err!(DnsException::LookupError(url.clone().into())),
                 Ok(socket_addrs_iter) => socket_addrs_iter,
             };
             return match addresses
@@ -30,8 +30,8 @@ mod impl_lookup {
                 .first()
             {
                 Some(SocketAddr::V6(addrs)) => Ok(Ipv6Addr::from(addrs.ip().octets())),
-                None => Err!(DnsError::LookupIpv6Error(url.into())),
-                _ => Err!(DnsError::LookupIpv6Error(url.into())),
+                None => Err!(DnsException::LookupIpv6Error(url.into())),
+                _ => Err!(DnsException::LookupIpv6Error(url.into())),
             };
         }
     }

@@ -5,9 +5,11 @@ use embedded_websocket::framer_async::FramerError;
 use thiserror_no_std::Error;
 
 #[derive(Debug, PartialEq, Eq, Error)]
-pub enum WebsocketError<E: Debug> {
-    #[error("Stream is not connected.")]
-    NotConnected,
+pub enum WebSocketException<E: Debug> {
+    #[error("Invalid domain")]
+    InvalidDomain,
+    #[error("Invalid scheme")]
+    InvalidScheme,
     // FramerError
     #[error("I/O error: {0:?}")]
     Io(E),
@@ -17,7 +19,7 @@ pub enum WebsocketError<E: Debug> {
     Utf8(Utf8Error),
     #[error("Invalid HTTP header")]
     HttpHeader,
-    #[error("Websocket error: {0:?}")]
+    #[error("WebSocket error: {0:?}")]
     WebSocket(embedded_websocket::Error),
     #[error("Disconnected")]
     Disconnected,
@@ -25,25 +27,25 @@ pub enum WebsocketError<E: Debug> {
     RxBufferTooSmall(usize),
 }
 
-impl<E: Debug> From<FramerError<E>> for WebsocketError<E> {
+impl<E: Debug> From<FramerError<E>> for WebSocketException<E> {
     fn from(e: FramerError<E>) -> Self {
         match e {
-            FramerError::Io(e) => WebsocketError::Io(e),
-            FramerError::FrameTooLarge(size) => WebsocketError::FrameTooLarge(size),
-            FramerError::Utf8(e) => WebsocketError::Utf8(e),
-            FramerError::HttpHeader(_) => WebsocketError::HttpHeader,
-            FramerError::WebSocket(e) => WebsocketError::WebSocket(e),
-            FramerError::Disconnected => WebsocketError::Disconnected,
-            FramerError::RxBufferTooSmall(size) => WebsocketError::RxBufferTooSmall(size),
+            FramerError::Io(e) => WebSocketException::Io(e),
+            FramerError::FrameTooLarge(size) => WebSocketException::FrameTooLarge(size),
+            FramerError::Utf8(e) => WebSocketException::Utf8(e),
+            FramerError::HttpHeader(_) => WebSocketException::HttpHeader,
+            FramerError::WebSocket(e) => WebSocketException::WebSocket(e),
+            FramerError::Disconnected => WebSocketException::Disconnected,
+            FramerError::RxBufferTooSmall(size) => WebSocketException::RxBufferTooSmall(size),
         }
     }
 }
 
-impl<E: Debug> Into<anyhow::Error> for WebsocketError<E> {
+impl<E: Debug> Into<anyhow::Error> for WebSocketException<E> {
     fn into(self) -> anyhow::Error {
         anyhow!(self)
     }
 }
 
 #[cfg(feature = "std")]
-impl<E: Debug> alloc::error::Error for WebsocketError<E> {}
+impl<E: Debug> alloc::error::Error for WebSocketException<E> {}
