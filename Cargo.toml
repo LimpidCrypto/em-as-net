@@ -78,13 +78,23 @@ default = [
 tcp = []
 dns = ["embassy-net/dns"]
 tls = []
-websocket = []
+websocket = ["embedded-websocket"]
 json-rpc = []
 std = [
-    "dep:tokio",
+    "tokio",
     "embedded-io-adapters/tokio-1",
     "embedded-websocket/std",
     "tokio-rustls",
     "webpki-roots",
 ]
 webpki-roots = ["dep:webpki-roots"]
+
+[[example]]
+name = "std_async_web_socket_client"
+path = "examples/std_async_web_socket_client.rs"
+required-features = ["std", "tcp", "websocket"]
+
+[[example]]
+name = "std_tls_async_web_socket_client"
+path = "examples/std_tls_async_web_socket_client.rs"
+required-features = ["std", "tcp", "tls", "websocket"]

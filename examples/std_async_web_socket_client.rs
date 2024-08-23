@@ -1,26 +1,26 @@
 use em_as_net::{
-    client::websocket::{ReadResult, WebSocketRead, WebSocketSendMessageType, WebSocketWrite},
-    core::{tcp::TcpStream, tls::TlsStream},
+    client::websocket::{
+        AsyncWebSocketClient, ReadResult, WebSocketRead, WebSocketSendMessageType, WebSocketWrite,
+    },
+    core::tcp::TcpStream,
 };
+use rand::thread_rng;
 use url::Url;
 
-use crate::common::{connect_ws, ECHO_WSS_SERVER};
-
-#[cfg(feature = "std")]
-#[tokio::test]
-async fn test_websocket_tls() {
-    let uri = Url::parse(ECHO_WSS_SERVER).unwrap();
-    println!("Connecting");
-    let stream = TcpStream::connect(&uri).await.unwrap();
+#[tokio::main]
+async fn main() {
+    let uri = Url::parse("ws://ws.vi-server.org:80/mirror/").unwrap();
+    let mut stream = TcpStream::connect(&uri).await.unwrap();
     println!("TCP Connected");
-    let mut tls_stream = TlsStream::connect(stream, &uri).await.unwrap();
-    println!("TLS Handshake Done");
     let mut buffer = [0u8; 4096];
-    let mut websocket = connect_ws(&uri, &mut tls_stream, &mut buffer).await;
+    let rng = thread_rng();
+    let mut websocket = AsyncWebSocketClient::open(&mut stream, &mut buffer, &uri, rng, None, None)
+        .await
+        .unwrap();
     println!("WebSocket Connected");
     websocket
         .write(
-            &mut tls_stream,
+            &mut stream,
             &mut buffer,
             WebSocketSendMessageType::Text,
             true,
@@ -31,7 +31,7 @@ async fn test_websocket_tls() {
     println!("Message Sent");
     loop {
         let message = websocket
-            .try_read(&mut tls_stream, &mut buffer)
+            .try_read(&mut stream, &mut buffer)
             .await
             .unwrap()
             .unwrap();

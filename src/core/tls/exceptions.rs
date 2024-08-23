@@ -1,10 +1,15 @@
-use anyhow::anyhow;
+use core::fmt::Debug;
+
 use embedded_io_async::ErrorKind;
 use rustls::pki_types::InvalidDnsNameError;
 use thiserror_no_std::Error;
 
 #[derive(Debug, Error)]
 pub enum TlsException {
+    #[cfg(not(feature = "std"))]
+    #[error("I/O error")]
+    IoError,
+    #[cfg(feature = "std")]
     #[error("I/O error: {0}")]
     IoError(alloc::io::Error),
     #[error("No domain")]
@@ -13,18 +18,6 @@ pub enum TlsException {
     EmbeddedIoAsyncError(ErrorKind),
     #[error("Invalid server name: {0}")]
     InvalidServerName(InvalidDnsNameError),
-}
-
-impl From<alloc::io::Error> for TlsException {
-    fn from(e: alloc::io::Error) -> Self {
-        TlsException::IoError(e)
-    }
-}
-
-impl Into<anyhow::Error> for TlsException {
-    fn into(self) -> anyhow::Error {
-        anyhow!(self)
-    }
 }
 
 impl embedded_io_async::Error for TlsException {

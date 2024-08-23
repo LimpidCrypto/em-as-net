@@ -1,11 +1,30 @@
 mod exceptions;
 
-use embedded_io_adapters::tokio_1::FromTokio;
 pub use exceptions::*;
-use tokio_rustls::client::TlsStream as TokioRustlsTlsStream;
 
 use anyhow::Result;
 use embedded_io_async::{Read, Write};
+
+#[cfg(not(feature = "std"))]
+pub use rustls_stream::*;
+
+#[cfg(not(feature = "std"))]
+mod rustls_stream {
+    use embedded_io_async::{Read, Write};
+    use embedded_websocket::Result;
+
+    pub struct TlsStream<S: Read + Write + Unpin>(S);
+
+    impl<S: Read + Write + Unpin> TlsStream<S> {
+        pub async fn connect(stream: S, _url: &url::Url) -> Result<Self> {
+            Ok(TlsStream(stream))
+        }
+
+        pub async fn accept(_stream: S, _url: &url::Url) -> Result<Self> {
+            todo!("Implement accept as TlsListener");
+        }
+    }
+}
 
 #[cfg(feature = "std")]
 pub use tokio_tls_stream::*;
@@ -13,9 +32,11 @@ pub use tokio_tls_stream::*;
 #[cfg(feature = "std")]
 mod tokio_tls_stream {
     use alloc::{borrow::Cow, string::String, sync::Arc};
+    use embedded_io_adapters::tokio_1::FromTokio;
     use embedded_io_async::ErrorType;
     use rustls::{pki_types::ServerName, ClientConfig, RootCertStore};
     use tokio::io::{AsyncRead, AsyncWrite};
+    use tokio_rustls::client::TlsStream as TokioRustlsTlsStream;
     use tokio_rustls::{TlsAcceptor, TlsConnector};
     use url::Url;
 
@@ -79,10 +100,10 @@ mod tokio_tls_stream {
         S: AsyncRead + AsyncWrite + Unpin,
     {
         async fn read(&mut self, buf: &mut [u8]) -> core::result::Result<usize, Self::Error> {
-            self.0
-                .read(buf)
-                .await
-                .map_err(|e| TlsException::IoError(e).into())
+            match self.0.read(buf).await {
+                Ok(n) => Ok(n),
+                Err(e) => Err(TlsException::IoError(e)),
+            }
         }
     }
 
@@ -91,17 +112,17 @@ mod tokio_tls_stream {
         S: AsyncRead + AsyncWrite + Unpin,
     {
         async fn write(&mut self, buf: &[u8]) -> core::result::Result<usize, Self::Error> {
-            self.0
-                .write(buf)
-                .await
-                .map_err(|e| TlsException::IoError(e).into())
+            match self.0.write(buf).await {
+                Ok(n) => Ok(n),
+                Err(e) => Err(TlsException::IoError(e)),
+            }
         }
 
         async fn flush(&mut self) -> core::result::Result<(), Self::Error> {
-            self.0
-                .flush()
-                .await
-                .map_err(|e| TlsException::IoError(e).into())
+            match self.0.flush().await {
+                Ok(()) => Ok(()),
+                Err(e) => Err(TlsException::IoError(e)),
+            }
         }
     }
 

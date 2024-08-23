@@ -29,9 +29,10 @@ mod _tokio {
 
     impl TcpStream {
         pub async fn connect(url: &Url) -> Result<TcpStream> {
-            let stream = TokioTcpStream::connect(derive_tcp_url(url, None)?)
-                .await
-                .map_err(|e| TcpException::IoError(e).into())?;
+            let stream = match TokioTcpStream::connect(derive_tcp_url(url, None)?).await {
+                Ok(stream) => stream,
+                Err(e) => return Err!(TcpException::IoError(e)),
+            };
             Ok(TcpStream(FromTokio::new(stream)))
         }
     }
@@ -42,20 +43,26 @@ mod _tokio {
 
     impl Read for TcpStream {
         async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-            self.0.read(buf).await.map_err(|e| TcpException::IoError(e))
+            match self.0.read(buf).await {
+                Ok(n) => Ok(n),
+                Err(e) => Err(TcpException::IoError(e)),
+            }
         }
     }
 
     impl Write for TcpStream {
         async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-            self.0
-                .write(buf)
-                .await
-                .map_err(|e| TcpException::IoError(e))
+            match self.0.write(buf).await {
+                Ok(n) => Ok(n),
+                Err(e) => Err(TcpException::IoError(e)),
+            }
         }
 
         async fn flush(&mut self) -> Result<(), Self::Error> {
-            self.0.flush().await.map_err(|e| TcpException::IoError(e))
+            match self.0.flush().await {
+                Ok(()) => Ok(()),
+                Err(e) => Err(TcpException::IoError(e)),
+            }
         }
     }
 
